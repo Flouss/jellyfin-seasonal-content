@@ -89,4 +89,22 @@ public class PluginConfiguration : BasePluginConfiguration
     /// slower clients have time to actually start rendering before being stopped.
     /// </summary>
     public int PlaybackStopDelaySeconds { get; set; } = 2;
+
+    /// <summary>
+    /// Gets or sets extra Radarr server/profile pairs offered as quality versions for movies,
+    /// alongside <see cref="JellyseerrRadarrServerId"/>/<see cref="JellyseerrRadarrProfileId"/> (the
+    /// "default" version). Empty by default - movies then keep today's single flat-file stub with
+    /// no version picker. Adding one or more entries here switches movie stubs to a
+    /// folder-per-title layout with one file per version, native Jellyfin alternate versions
+    /// (docs/decisions.md "M5a spike finding"). Requires both default fields to be set - see
+    /// <see cref="Sync.SeasonalContentSyncTask"/>.
+    /// </summary>
+    public List<RequestProfile> ExtraMovieProfiles { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets extra Sonarr server/profile pairs offered as quality versions for TV shows - the
+    /// TV counterpart of <see cref="ExtraMovieProfiles"/>. Independent id space from the movie list
+    /// (docs/rename-tv-globalkey-plan.md).
+    /// </summary>
+    public List<RequestProfile> ExtraTvProfiles { get; set; } = [];
 }

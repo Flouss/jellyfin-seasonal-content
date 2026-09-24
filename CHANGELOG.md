@@ -20,6 +20,12 @@ All notable changes to this plugin are documented here.
   stub library, and pressing Play on one requests the whole series through Jellyseerr (Sonarr
   server/quality profile configurable, separately from Radarr's). "Set up libraries" now creates
   both stub libraries plus Collections in one step.
+- **Optional quality version picker.** Add one or more extra Radarr/Sonarr server+profile pairs in
+  the config page's Requests section to offer a native Jellyfin version picker (verified live on
+  Web and Wolphin) before playback, instead of always requesting with the single default
+  profile. Movie/TV stubs switch to a folder-per-title layout with one file per version only when
+  at least one extra profile is configured; leaving the list empty keeps today's single-stub
+  behavior unchanged.
 
 ## 0.1.0.0
 

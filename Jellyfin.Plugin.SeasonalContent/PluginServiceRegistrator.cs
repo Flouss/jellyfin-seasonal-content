@@ -4,6 +4,7 @@ using Jellyfin.Plugin.SeasonalContent.Lists;
 using Jellyfin.Plugin.SeasonalContent.Lists.MdbList;
 using Jellyfin.Plugin.SeasonalContent.Ownership;
 using Jellyfin.Plugin.SeasonalContent.Playback;
+using Jellyfin.Plugin.SeasonalContent.RequestProfiles;
 using Jellyfin.Plugin.SeasonalContent.Setup;
 using Jellyfin.Plugin.SeasonalContent.Stubs;
 using Jellyfin.Plugin.SeasonalContent.Sync;
@@ -29,11 +30,13 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddScoped<IMediaCatalog, LibraryMediaCatalog>();
         serviceCollection.AddScoped<IStubFileIoExecutor, StubFileIoExecutor>();
         serviceCollection.AddScoped<ITvStubFileIoExecutor, TvStubFileIoExecutor>();
+        serviceCollection.AddScoped<IMultiVersionStubFileIoExecutor, MultiVersionStubFileIoExecutor>();
         serviceCollection.AddScoped<IStubLibraryScanner, StubLibraryScanner>();
         serviceCollection.AddScoped<ICollectionReconciler, CollectionReconciler>();
         serviceCollection.AddScoped<ILibrarySetupService, LibrarySetupService>();
         serviceCollection.AddScoped<IScheduledTask, SeasonalContentSyncTask>();
         serviceCollection.AddSingleton<IJellyseerrClient, JellyseerrClient>();
+        serviceCollection.AddScoped<IRequestProfileResolver, RequestProfileResolver>();
         serviceCollection.AddHostedService<StubPlaybackInterceptor>();
     }
 }

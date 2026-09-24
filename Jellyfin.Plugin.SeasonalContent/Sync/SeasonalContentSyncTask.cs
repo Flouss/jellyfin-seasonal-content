@@ -9,6 +9,7 @@ using Jellyfin.Plugin.SeasonalContent.Collections;
 using Jellyfin.Plugin.SeasonalContent.Configuration;
 using Jellyfin.Plugin.SeasonalContent.Lists;
 using Jellyfin.Plugin.SeasonalContent.Ownership;
+using Jellyfin.Plugin.SeasonalContent.RequestProfiles;
 using Jellyfin.Plugin.SeasonalContent.Stubs;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,8 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
     private readonly IMediaCatalog _mediaCatalog;
     private readonly IStubFileIoExecutor _stubFileIoExecutor;
     private readonly ITvStubFileIoExecutor _tvStubFileIoExecutor;
+    private readonly IMultiVersionStubFileIoExecutor _multiVersionStubFileIoExecutor;
+    private readonly IRequestProfileResolver _requestProfileResolver;
     private readonly IStubLibraryScanner _stubLibraryScanner;
     private readonly ICollectionReconciler _collectionReconciler;
     private readonly ILogger<SeasonalContentSyncTask> _logger;
@@ -38,6 +41,8 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
     /// <param name="mediaCatalog">Instance of the <see cref="IMediaCatalog"/> interface.</param>
     /// <param name="stubFileIoExecutor">Instance of the <see cref="IStubFileIoExecutor"/> interface.</param>
     /// <param name="tvStubFileIoExecutor">Instance of the <see cref="ITvStubFileIoExecutor"/> interface.</param>
+    /// <param name="multiVersionStubFileIoExecutor">Instance of the <see cref="IMultiVersionStubFileIoExecutor"/> interface.</param>
+    /// <param name="requestProfileResolver">Instance of the <see cref="IRequestProfileResolver"/> interface.</param>
     /// <param name="stubLibraryScanner">Instance of the <see cref="IStubLibraryScanner"/> interface.</param>
     /// <param name="collectionReconciler">Instance of the <see cref="ICollectionReconciler"/> interface.</param>
     /// <param name="logger">Instance of the <see cref="ILogger{TCategoryName}"/> interface.</param>
@@ -46,6 +51,8 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
         IMediaCatalog mediaCatalog,
         IStubFileIoExecutor stubFileIoExecutor,
         ITvStubFileIoExecutor tvStubFileIoExecutor,
+        IMultiVersionStubFileIoExecutor multiVersionStubFileIoExecutor,
+        IRequestProfileResolver requestProfileResolver,
         IStubLibraryScanner stubLibraryScanner,
         ICollectionReconciler collectionReconciler,
         ILogger<SeasonalContentSyncTask> logger)
@@ -54,6 +61,8 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
         _mediaCatalog = mediaCatalog;
         _stubFileIoExecutor = stubFileIoExecutor;
         _tvStubFileIoExecutor = tvStubFileIoExecutor;
+        _multiVersionStubFileIoExecutor = multiVersionStubFileIoExecutor;
+        _requestProfileResolver = requestProfileResolver;
         _stubLibraryScanner = stubLibraryScanner;
         _collectionReconciler = collectionReconciler;
         _logger = logger;
@@ -144,18 +153,29 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
         var notOwnedItems = succeeded.SelectMany(s => s.Partition.NotOwned).ToList();
 
         // 2. Reconcile movie stub files, over the union of every list that fetched successfully.
+        // Whether this is the legacy single-file-per-title layout or the multi-version
+        // "quality picker" layout (docs/decisions.md "M5a spike finding") is decided fresh every
+        // sync from current config + live Jellyseerr state - see ResolveActiveProfilesAsync.
         var desiredMovieItems = DesiredStubSet.Build(notOwnedItems.Where(i => i.Kind == MediaKind.Movie));
-        var existingMovieFiles = _stubFileIoExecutor.ListExistingFiles(stubRootPath);
-        var moviePlan = StubReconciler.BuildPlan(desiredMovieItems, existingMovieFiles, expectedContent);
-        _stubFileIoExecutor.Apply(moviePlan, stubRootPath);
-        _logger.LogInformation("Movie stub reconcile: {Written} written, {Deleted} deleted.", moviePlan.FilesToWrite.Count, moviePlan.FileNamesToDelete.Count);
+        var movieResolution = await ResolveActiveProfilesAsync(
+                MediaKind.Movie,
+                config.JellyseerrRadarrServerId,
+                config.JellyseerrRadarrProfileId,
+                config.ExtraMovieProfiles,
+                cancellationToken)
+            .ConfigureAwait(false);
+        ReconcileMovieStubs(movieResolution, desiredMovieItems, stubRootPath, expectedContent);
 
         // 3. Reconcile TV stub folders the same way.
         var desiredShowItems = DesiredStubSet.Build(notOwnedItems.Where(i => i.Kind == MediaKind.Series));
-        var existingShowFolders = _tvStubFileIoExecutor.ListExistingSeriesFolders(tvStubRootPath);
-        var tvPlan = TvStubReconciler.BuildPlan(desiredShowItems, existingShowFolders, expectedContent);
-        _tvStubFileIoExecutor.Apply(tvPlan, tvStubRootPath);
-        _logger.LogInformation("TV stub reconcile: {Written} written, {Deleted} deleted.", tvPlan.SeriesToWrite.Count, tvPlan.FolderNamesToDelete.Count);
+        var tvResolution = await ResolveActiveProfilesAsync(
+                MediaKind.Series,
+                config.JellyseerrSonarrServerId,
+                config.JellyseerrSonarrProfileId,
+                config.ExtraTvProfiles,
+                cancellationToken)
+            .ConfigureAwait(false);
+        ReconcileTvStubs(tvResolution, desiredShowItems, tvStubRootPath, expectedContent);
 
         progress.Report(45);
 
@@ -250,4 +270,200 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
             return false;
         }
     }
+
+    /// <summary>
+    /// Decides, for one kind this sync, whether the multi-version "quality picker" layout is active
+    /// (docs/decisions.md "M5a spike finding") - and if so, resolves its labeled profiles live from
+    /// Jellyseerr. Never mixes the two outcomes silently: a hard Jellyseerr failure skips reconcile
+    /// entirely rather than falling back to the legacy layout, which would otherwise risk writing a
+    /// flat file for a title that still has a multi-version folder on disk from a previous sync
+    /// (two separate library items for the same title) - see <see cref="ReconcileMovieStubs"/>/
+    /// <see cref="ReconcileTvStubs"/> for how the "use legacy" outcome still cleans up the other
+    /// layout's leftovers when it's a deliberate, stable state rather than a transient failure.
+    /// </summary>
+    private async Task<ProfileResolution> ResolveActiveProfilesAsync(
+        MediaKind kind,
+        int? defaultServerId,
+        int? defaultProfileId,
+        List<RequestProfile> extraProfiles,
+        CancellationToken cancellationToken)
+    {
+        if (extraProfiles.Count == 0)
+        {
+            return new ProfileResolution(ProfileResolutionOutcome.UseLegacy, []);
+        }
+
+        if (defaultServerId is null || defaultProfileId is null)
+        {
+            _logger.LogWarning(
+                "{Kind}: {Count} extra request profile(s) configured but the default server/profile fields are not both set - quality version picker stays off until both are set.",
+                kind,
+                extraProfiles.Count);
+            return new ProfileResolution(ProfileResolutionOutcome.UseLegacy, []);
+        }
+
+        var candidates = new List<RequestProfile> { new() { ServerId = defaultServerId.Value, ProfileId = defaultProfileId.Value } };
+        candidates.AddRange(extraProfiles);
+
+        var result = await _requestProfileResolver.ResolveAsync(kind, candidates, cancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            _logger.LogError(
+                "{Kind}: failed to resolve request profiles from Jellyseerr ({Error}) - stub reconcile skipped this sync, existing stubs left untouched.",
+                kind,
+                result.ErrorMessage);
+            return new ProfileResolution(ProfileResolutionOutcome.SkipReconcile, []);
+        }
+
+        if (result.Profiles.Count < 2)
+        {
+            _logger.LogWarning(
+                "{Kind}: only {Count} request profile(s) resolved - not enough to offer a version picker; falling back to a single stub per title for this sync.",
+                kind,
+                result.Profiles.Count);
+            return new ProfileResolution(ProfileResolutionOutcome.UseLegacy, []);
+        }
+
+        return new ProfileResolution(ProfileResolutionOutcome.UseMultiVersion, result.Profiles);
+    }
+
+    private void ReconcileMovieStubs(ProfileResolution resolution, IReadOnlyList<ListItem> desiredItems, string stubRootPath, string expectedContent)
+    {
+        if (resolution.Outcome == ProfileResolutionOutcome.SkipReconcile)
+        {
+            _logger.LogWarning("Movie stub reconcile skipped this sync (see error logged above) - existing stubs left untouched.");
+            return;
+        }
+
+        if (resolution.Outcome == ProfileResolutionOutcome.UseMultiVersion)
+        {
+            var existingFolders = _multiVersionStubFileIoExecutor.ListExistingFolders(stubRootPath);
+            var plan = MultiVersionStubReconciler.BuildPlan(
+                desiredItems,
+                resolution.Profiles,
+                existingFolders,
+                expectedContent,
+                item => StubFileNaming.BuildTitleFolderName(item.Title, item.Year, item.TmdbId),
+                (item, profile) => StubFileNaming.BuildVersionFileName(item.Title, item.Year, item.TmdbId, profile.Label));
+            _multiVersionStubFileIoExecutor.Apply(plan, stubRootPath);
+            _logger.LogInformation(
+                "Movie stub reconcile (multi-version): {Touched} folder(s) touched, {Deleted} deleted.",
+                plan.FoldersToReconcile.Count,
+                plan.FolderNamesToDelete.Count);
+
+            // Clean up any flat-file stubs left over from before the picker was turned on.
+            var existingFlatFiles = _stubFileIoExecutor.ListExistingFiles(stubRootPath);
+            _stubFileIoExecutor.Apply(StubReconciler.BuildPlan([], existingFlatFiles, expectedContent), stubRootPath);
+        }
+        else
+        {
+            var existingFiles = _stubFileIoExecutor.ListExistingFiles(stubRootPath);
+            var plan = StubReconciler.BuildPlan(desiredItems, existingFiles, expectedContent);
+            _stubFileIoExecutor.Apply(plan, stubRootPath);
+            _logger.LogInformation("Movie stub reconcile: {Written} written, {Deleted} deleted.", plan.FilesToWrite.Count, plan.FileNamesToDelete.Count);
+
+            // Clean up any multi-version folders left over from before the picker was turned off.
+            var existingFolders = _multiVersionStubFileIoExecutor.ListExistingFolders(stubRootPath);
+            _multiVersionStubFileIoExecutor.Apply(
+                MultiVersionStubReconciler.BuildPlan([], [], existingFolders, expectedContent, static _ => string.Empty, static (_, _) => string.Empty),
+                stubRootPath);
+        }
+    }
+
+    private void ReconcileTvStubs(ProfileResolution resolution, IReadOnlyList<ListItem> desiredItems, string tvStubRootPath, string expectedContent)
+    {
+        if (resolution.Outcome == ProfileResolutionOutcome.SkipReconcile)
+        {
+            _logger.LogWarning("TV stub reconcile skipped this sync (see error logged above) - existing stubs left untouched.");
+            return;
+        }
+
+        if (resolution.Outcome == ProfileResolutionOutcome.UseMultiVersion)
+        {
+            // No separate "clean up single-episode leftovers" pass needed here: unlike the movie
+            // layout (a flat file vs. a same-named folder - structurally disjoint), TV's legacy and
+            // multi-version layouts share the same "series folder / Season 01" nesting, so a stray
+            // legacy episode file inside a folder this call desires is just another existing file
+            // the diff below (an exact per-relative-path comparison, not "grab the first file
+            // found") already sees and marks for deletion on its own.
+            var existingFolders = _multiVersionStubFileIoExecutor.ListExistingFolders(tvStubRootPath);
+            var plan = MultiVersionStubReconciler.BuildPlan(
+                desiredItems,
+                resolution.Profiles,
+                existingFolders,
+                expectedContent,
+                item => TvStubFileNaming.BuildSeriesFolderName(item.Title, item.Year, item.TmdbId),
+                (item, profile) => TvStubFileNaming.BuildVersionedEpisodeRelativePath(item.Title, item.TmdbId, profile.Label));
+            _multiVersionStubFileIoExecutor.Apply(plan, tvStubRootPath);
+            _logger.LogInformation(
+                "TV stub reconcile (multi-version): {Touched} folder(s) touched, {Deleted} deleted.",
+                plan.FoldersToReconcile.Count,
+                plan.FolderNamesToDelete.Count);
+        }
+        else
+        {
+            // Legacy mode shares TV's folder/Season-01 nesting with multi-version mode, so a folder
+            // left over from the picker being on previously can hold stray version-labeled files
+            // alongside (or instead of) the one legacy file expected. ListExistingSeriesFolders below
+            // just grabs "the first .strm file under Season 01", regardless of name - it would
+            // mistake a leftover version file's matching dummy content for "the correct legacy file
+            // already present" and skip writing the real one, permanently stuck (every future sync
+            // would repeat the same false "already in sync"). Strip anything that isn't the exact
+            // legacy file name first, via the multi-version executor's precise per-file scan, so the
+            // legacy reconcile below never sees an ambiguous folder.
+            RemoveStaleVersionedFilesFromDesiredTvFolders(desiredItems, tvStubRootPath);
+
+            var existingSeriesFolders = _tvStubFileIoExecutor.ListExistingSeriesFolders(tvStubRootPath);
+            var plan = TvStubReconciler.BuildPlan(desiredItems, existingSeriesFolders, expectedContent);
+            _tvStubFileIoExecutor.Apply(plan, tvStubRootPath);
+            _logger.LogInformation("TV stub reconcile: {Written} written, {Deleted} deleted.", plan.SeriesToWrite.Count, plan.FolderNamesToDelete.Count);
+
+            // Clean up any multi-version folders left over entirely (titles no longer desired at
+            // all - a still-desired folder was already stripped down to just its legacy file above).
+            var existingFolders = _multiVersionStubFileIoExecutor.ListExistingFolders(tvStubRootPath);
+            _multiVersionStubFileIoExecutor.Apply(
+                MultiVersionStubReconciler.BuildPlan([], [], existingFolders, expectedContent, static _ => string.Empty, static (_, _) => string.Empty),
+                tvStubRootPath);
+        }
+    }
+
+    private void RemoveStaleVersionedFilesFromDesiredTvFolders(IReadOnlyList<ListItem> desiredItems, string tvStubRootPath)
+    {
+        var preciseFolders = _multiVersionStubFileIoExecutor.ListExistingFolders(tvStubRootPath);
+        var foldersToStrip = new List<VersionedFolderPlan>();
+
+        foreach (var item in desiredItems)
+        {
+            var folderName = TvStubFileNaming.BuildSeriesFolderName(item.Title, item.Year, item.TmdbId);
+            var folder = preciseFolders.FirstOrDefault(f => f.FolderName == folderName);
+            if (folder is null)
+            {
+                continue;
+            }
+
+            var legacyRelativePath = TvStubFileNaming.BuildEpisodeRelativePath(item.Title, item.TmdbId);
+            var staleRelativePaths = folder.ExistingFilesByRelativePath.Keys
+                .Where(path => path != legacyRelativePath)
+                .ToList();
+
+            if (staleRelativePaths.Count > 0)
+            {
+                foldersToStrip.Add(new VersionedFolderPlan(folderName, staleRelativePaths, []));
+            }
+        }
+
+        if (foldersToStrip.Count > 0)
+        {
+            _multiVersionStubFileIoExecutor.Apply(new MultiVersionStubReconcilePlan([], foldersToStrip), tvStubRootPath);
+        }
+    }
+
+    private enum ProfileResolutionOutcome
+    {
+        UseLegacy,
+        UseMultiVersion,
+        SkipReconcile
+    }
+
+    private sealed record ProfileResolution(ProfileResolutionOutcome Outcome, IReadOnlyList<ResolvedRequestProfile> Profiles);
 }
