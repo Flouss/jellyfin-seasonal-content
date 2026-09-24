@@ -11,19 +11,21 @@ namespace Jellyfin.Plugin.SeasonalContent.Sync;
 public static class ListPartitioner
 {
     /// <summary>
-    /// Partitions <paramref name="items"/> against an owned-movie index.
+    /// Partitions <paramref name="items"/> against an owned-item index.
     /// </summary>
     /// <param name="items">The list's items.</param>
-    /// <param name="ownedIndex">TMDb id to item id, from <see cref="Ownership.OwnedMovieIndex"/>.</param>
+    /// <param name="ownedIndex">(Kind, TMDb id) to item id, from <see cref="Ownership.OwnedItemIndex"/>.
+    /// Keyed on kind as well as TMDb id since a movie and a show can share a numeric TMDb id - see
+    /// docs/rename-tv-globalkey-plan.md's "correctness constraint".</param>
     /// <returns>The partitioned result.</returns>
-    public static PartitionResult Partition(IReadOnlyList<ListItem> items, IReadOnlyDictionary<int, Guid> ownedIndex)
+    public static PartitionResult Partition(IReadOnlyList<ListItem> items, IReadOnlyDictionary<(MediaKind Kind, int TmdbId), Guid> ownedIndex)
     {
         var owned = new List<OwnedListItem>();
         var notOwned = new List<ListItem>();
 
         foreach (var item in items)
         {
-            if (ownedIndex.TryGetValue(item.TmdbId, out var ownedItemId))
+            if (ownedIndex.TryGetValue((item.Kind, item.TmdbId), out var ownedItemId))
             {
                 owned.Add(new OwnedListItem(item, ownedItemId));
             }

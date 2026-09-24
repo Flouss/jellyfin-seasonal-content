@@ -55,17 +55,23 @@
                     </div>
 
                     <div class="verticalSection">
-                        <h2>Stub library</h2>
+                        <h2>Stub libraries</h2>
                         <div class="fieldDescription">
-                            This plugin needs a <strong>Movies</strong>-type library at the path below (with the
-                            TMDb metadata fetcher enabled) and a <strong>Collections</strong> library so the
-                            seasonal BoxSets it creates are browsable. Click "Set up libraries" to create
-                            whichever of the two don't already exist - safe to click again later, it skips
-                            anything already set up. Every restricted user still needs explicit access granted
-                            to the stub library by hand, or their collections will silently show missing stubs.
+                            This plugin needs a <strong>Movies</strong>-type library at the movie path below, a
+                            <strong>Shows</strong>-type library at the TV path below (both with the TMDb metadata
+                            fetcher enabled), and a <strong>Collections</strong> library so the collections it
+                            creates are browsable. Click "Set up libraries" to create whichever of the three
+                            don't already exist - safe to click again later, it skips anything already set up.
+                            Every restricted user still needs explicit access granted to both stub libraries by
+                            hand, or their collections will silently show missing stubs.
                         </div>
                         <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused">Movie stub path</label>
                             <input id="StubRootPathDisplay" type="text" is="emby-input" readonly />
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused">TV stub path</label>
+                            <input id="TvStubRootPathDisplay" type="text" is="emby-input" readonly />
                         </div>
                         <div>
                             <button id="btnSetupLibraries" is="emby-button" type="button" class="raised button-submit block emby-button">
@@ -77,6 +83,10 @@
 
                     <div class="verticalSection">
                         <h2>Lists</h2>
+                        <div class="fieldDescription">
+                            Each list is fetched from MDBList and can contain both movies and TV shows - both are
+                            added to the same collection.
+                        </div>
                         <div id="listsContainer"></div>
                         <div>
                             <button id="btnAddList" is="emby-button" type="button" class="raised block emby-button">
@@ -88,12 +98,22 @@
                     <div class="verticalSection">
                         <h2>Requests</h2>
                         <div class="selectContainer">
-                            <select id="JellyseerrRadarrServerId" is="emby-select" label="Radarr server (Jellyseerr default if unset)">
+                            <select id="JellyseerrRadarrServerId" is="emby-select" label="Radarr server, for movies (Jellyseerr default if unset)">
                                 <option value="">Use Jellyseerr's default</option>
                             </select>
                         </div>
                         <div class="selectContainer">
                             <select id="JellyseerrRadarrProfileId" is="emby-select" label="Quality profile (Radarr default if unset)">
+                                <option value="">Use the server's default</option>
+                            </select>
+                        </div>
+                        <div class="selectContainer">
+                            <select id="JellyseerrSonarrServerId" is="emby-select" label="Sonarr server, for TV shows (Jellyseerr default if unset)">
+                                <option value="">Use Jellyseerr's default</option>
+                            </select>
+                        </div>
+                        <div class="selectContainer">
+                            <select id="JellyseerrSonarrProfileId" is="emby-select" label="Quality profile (Sonarr default if unset)">
                                 <option value="">Use the server's default</option>
                             </select>
                         </div>
@@ -264,10 +284,10 @@
                     renderListRow({ Enabled: true, Limit: 100 });
                 });
 
-                // ---- Jellyseerr / Radarr dropdowns ----
+                // ---- Jellyseerr / Radarr / Sonarr dropdowns ----
 
-                function populateServerDropdown(servers, selectedId) {
-                    var select = document.querySelector('#JellyseerrRadarrServerId');
+                function populateServerDropdown(selectId, servers, selectedId) {
+                    var select = document.querySelector(selectId);
                     select.innerHTML = '<option value="">Use Jellyseerr\'s default</option>';
                     servers.forEach(function (s) {
                         var opt = document.createElement('option');
@@ -280,8 +300,8 @@
                     }
                 }
 
-                function populateProfileDropdown(profiles, selectedId) {
-                    var select = document.querySelector('#JellyseerrRadarrProfileId');
+                function populateProfileDropdown(selectId, profiles, selectedId) {
+                    var select = document.querySelector(selectId);
                     select.innerHTML = '<option value="">Use the server\'s default</option>';
                     profiles.forEach(function (p) {
                         var opt = document.createElement('option');
@@ -298,7 +318,7 @@
                     var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/RadarrServers');
                     return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (servers) {
                         radarrServers = servers;
-                        populateServerDropdown(servers, preselectServerId);
+                        populateServerDropdown('#JellyseerrRadarrServerId', servers, preselectServerId);
                         if (preselectServerId !== null && preselectServerId !== undefined && preselectServerId !== '') {
                             return loadRadarrProfiles(preselectServerId, preselectProfileId);
                         }
@@ -309,19 +329,48 @@
 
                 function loadRadarrProfiles(serverId, preselectProfileId) {
                     if (serverId === '' || serverId === null || serverId === undefined) {
-                        populateProfileDropdown([], null);
+                        populateProfileDropdown('#JellyseerrRadarrProfileId', [], null);
                         return Promise.resolve();
                     }
                     var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/RadarrServers/' + encodeURIComponent(serverId) + '/Profiles');
                     return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (profiles) {
-                        populateProfileDropdown(profiles, preselectProfileId);
+                        populateProfileDropdown('#JellyseerrRadarrProfileId', profiles, preselectProfileId);
                     }).catch(function () {
-                        populateProfileDropdown([], null);
+                        populateProfileDropdown('#JellyseerrRadarrProfileId', [], null);
+                    });
+                }
+
+                function loadSonarrServers(preselectServerId, preselectProfileId) {
+                    var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/SonarrServers');
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (servers) {
+                        populateServerDropdown('#JellyseerrSonarrServerId', servers, preselectServerId);
+                        if (preselectServerId !== null && preselectServerId !== undefined && preselectServerId !== '') {
+                            return loadSonarrProfiles(preselectServerId, preselectProfileId);
+                        }
+                    }).catch(function () {
+                        // Jellyseerr not configured/reachable yet - leave the dropdowns at their defaults.
+                    });
+                }
+
+                function loadSonarrProfiles(serverId, preselectProfileId) {
+                    if (serverId === '' || serverId === null || serverId === undefined) {
+                        populateProfileDropdown('#JellyseerrSonarrProfileId', [], null);
+                        return Promise.resolve();
+                    }
+                    var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/SonarrServers/' + encodeURIComponent(serverId) + '/Profiles');
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (profiles) {
+                        populateProfileDropdown('#JellyseerrSonarrProfileId', profiles, preselectProfileId);
+                    }).catch(function () {
+                        populateProfileDropdown('#JellyseerrSonarrProfileId', [], null);
                     });
                 }
 
                 document.querySelector('#JellyseerrRadarrServerId').addEventListener('change', function (e) {
                     loadRadarrProfiles(e.target.value, null);
+                });
+
+                document.querySelector('#JellyseerrSonarrServerId').addEventListener('change', function (e) {
+                    loadSonarrProfiles(e.target.value, null);
                 });
 
                 document.querySelector('#btnTestJellyseerr').addEventListener('click', function () {
@@ -345,9 +394,14 @@
                         return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' });
                     }).then(function (res) {
                         showResult(resultEl, true, 'Success: ' + res.Message);
-                        return loadRadarrServers(
-                            document.querySelector('#JellyseerrRadarrServerId').value,
-                            document.querySelector('#JellyseerrRadarrProfileId').value);
+                        return Promise.all([
+                            loadRadarrServers(
+                                document.querySelector('#JellyseerrRadarrServerId').value,
+                                document.querySelector('#JellyseerrRadarrProfileId').value),
+                            loadSonarrServers(
+                                document.querySelector('#JellyseerrSonarrServerId').value,
+                                document.querySelector('#JellyseerrSonarrProfileId').value)
+                        ]);
                     }).catch(function (err) {
                         return describeAjaxError(err, function (body) {
                             return body && body.Message;
@@ -377,7 +431,10 @@
                             document.querySelector('#PlaybackStopDelaySeconds').value = config.PlaybackStopDelaySeconds || 2;
                             document.querySelector('#RemoveCollectionWhenListDisabled').checked = config.RemoveCollectionWhenListDisabled !== false;
 
-                            return loadRadarrServers(config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId);
+                            return Promise.all([
+                                loadRadarrServers(config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId),
+                                loadSonarrServers(config.JellyseerrSonarrServerId, config.JellyseerrSonarrProfileId)
+                            ]);
                         });
 
                         var listsPromise = loadLists();
@@ -386,6 +443,7 @@
                             type: 'GET', url: ApiClient.getUrl('SeasonalContent/StubRootPath'), dataType: 'json'
                         }).then(function (res) {
                             document.querySelector('#StubRootPathDisplay').value = res.path;
+                            document.querySelector('#TvStubRootPathDisplay').value = res.tvPath;
                         });
 
                         Promise.all([configPromise, listsPromise, stubRootPromise]).then(function () {
@@ -434,7 +492,9 @@
                     ApiClient.ajax({ type: 'POST', url: url, dataType: 'json' })
                         .then(function (res) {
                             resultEl.style.color = '#00a651';
-                            resultEl.textContent = 'Stub library: ' + res.StubLibrary.Message + ' Collections library: ' + res.CollectionsLibrary.Message;
+                            resultEl.textContent = 'Movie stub library: ' + res.StubLibrary.Message
+                                + ' TV stub library: ' + res.TvStubLibrary.Message
+                                + ' Collections library: ' + res.CollectionsLibrary.Message;
                         })
                         .catch(function (err) {
                             return describeAjaxError(err, function (body) {
@@ -476,6 +536,11 @@
                             config.JellyseerrRadarrServerId = serverVal === '' ? null : parseInt(serverVal, 10);
                             var profileVal = document.querySelector('#JellyseerrRadarrProfileId').value;
                             config.JellyseerrRadarrProfileId = profileVal === '' ? null : parseInt(profileVal, 10);
+
+                            var sonarrServerVal = document.querySelector('#JellyseerrSonarrServerId').value;
+                            config.JellyseerrSonarrServerId = sonarrServerVal === '' ? null : parseInt(sonarrServerVal, 10);
+                            var sonarrProfileVal = document.querySelector('#JellyseerrSonarrProfileId').value;
+                            config.JellyseerrSonarrProfileId = sonarrProfileVal === '' ? null : parseInt(sonarrProfileVal, 10);
 
                             config.PlaybackStopDelaySeconds = parseInt(document.querySelector('#PlaybackStopDelaySeconds').value, 10) || 0;
                             config.RemoveCollectionWhenListDisabled = document.querySelector('#RemoveCollectionWhenListDisabled').checked;

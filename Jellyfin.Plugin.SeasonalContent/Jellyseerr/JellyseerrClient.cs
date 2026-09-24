@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.SeasonalContent.Lists;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SeasonalContent.Jellyseerr;
@@ -67,33 +68,40 @@ public sealed class JellyseerrClient : IJellyseerrClient
     }
 
     /// <inheritdoc />
-    public async Task<JellyseerrMovieStatusResult> GetMovieStatusAsync(int tmdbId, CancellationToken cancellationToken)
+    public Task<JellyseerrMediaStatusResult> GetMovieStatusAsync(int tmdbId, CancellationToken cancellationToken) =>
+        GetMediaStatusAsync("movie/" + tmdbId.ToString(CultureInfo.InvariantCulture), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<JellyseerrMediaStatusResult> GetTvStatusAsync(int tmdbId, CancellationToken cancellationToken) =>
+        GetMediaStatusAsync("tv/" + tmdbId.ToString(CultureInfo.InvariantCulture), cancellationToken);
+
+    private async Task<JellyseerrMediaStatusResult> GetMediaStatusAsync(string relativePath, CancellationToken cancellationToken)
     {
         try
         {
             using var client = CreateClient(out var baseUrl);
             if (client is null)
             {
-                return new JellyseerrMovieStatusResult(false, null, "Jellyseerr is not configured.");
+                return new JellyseerrMediaStatusResult(false, null, "Jellyseerr is not configured.");
             }
 
-            using var response = await client.GetAsync(BuildUrl(baseUrl, "movie/" + tmdbId.ToString(CultureInfo.InvariantCulture)), cancellationToken).ConfigureAwait(false);
+            using var response = await client.GetAsync(BuildUrl(baseUrl, relativePath), cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return new JellyseerrMovieStatusResult(false, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
+                return new JellyseerrMediaStatusResult(false, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
             }
 
-            var dto = await response.Content.ReadFromJsonAsync<MovieDetailsJson>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var dto = await response.Content.ReadFromJsonAsync<MediaDetailsJson>(JsonOptions, cancellationToken).ConfigureAwait(false);
             var status = dto?.MediaInfo is { } mediaInfo ? (JellyseerrMediaStatus)mediaInfo.Status : (JellyseerrMediaStatus?)null;
-            return new JellyseerrMovieStatusResult(true, status, null);
+            return new JellyseerrMediaStatusResult(true, status, null);
         }
         catch (HttpRequestException ex)
         {
-            return new JellyseerrMovieStatusResult(false, null, ex.Message);
+            return new JellyseerrMediaStatusResult(false, null, ex.Message);
         }
         catch (JsonException ex)
         {
-            return new JellyseerrMovieStatusResult(false, null, ex.Message);
+            return new JellyseerrMediaStatusResult(false, null, ex.Message);
         }
     }
 
@@ -135,7 +143,7 @@ public sealed class JellyseerrClient : IJellyseerrClient
     }
 
     /// <inheritdoc />
-    public async Task<JellyseerrCreateRequestResult> CreateRequestAsync(int tmdbId, int jellyseerrUserId, int? radarrServerId, int? radarrProfileId, CancellationToken cancellationToken)
+    public async Task<JellyseerrCreateRequestResult> CreateRequestAsync(int tmdbId, MediaKind kind, int jellyseerrUserId, int? serverId, int? profileId, CancellationToken cancellationToken)
     {
         try
         {
@@ -145,11 +153,16 @@ public sealed class JellyseerrClient : IJellyseerrClient
                 return new JellyseerrCreateRequestResult(false, null, "Jellyseerr is not configured.");
             }
 
+            // A TV request always requests every season ("seasons: 'all'", read directly from
+            // Jellyseerr's own MediaRequest.ts - see docs/rename-tv-globalkey-plan.md); the field
+            // must be entirely absent for a movie request, not null (same JsonIgnoreCondition rule
+            // that already applies to ServerId/ProfileId below).
             var body = new CreateRequestJson(
-                MediaType: "movie",
+                MediaType: kind == MediaKind.Series ? "tv" : "movie",
                 MediaId: tmdbId,
-                ServerId: radarrServerId,
-                ProfileId: radarrProfileId);
+                ServerId: serverId,
+                ProfileId: profileId,
+                Seasons: kind == MediaKind.Series ? "all" : null);
 
             // X-Api-User, not a "userId" body field, is what actually makes this request subject
             // to the target user's own permissions. Verified live + against Jellyseerr's own
@@ -251,6 +264,69 @@ public sealed class JellyseerrClient : IJellyseerrClient
         }
     }
 
+    /// <inheritdoc />
+    public async Task<JellyseerrSonarrLookupResult> GetSonarrServersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = CreateClient(out var baseUrl);
+            if (client is null)
+            {
+                return new JellyseerrSonarrLookupResult(false, null, null, "Jellyseerr is not configured.");
+            }
+
+            using var response = await client.GetAsync(BuildUrl(baseUrl, "service/sonarr"), cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new JellyseerrSonarrLookupResult(false, null, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
+            }
+
+            // Same wire shape as /service/radarr - the private *Json DTOs are reused as-is.
+            var dto = await response.Content.ReadFromJsonAsync<List<RadarrServerJson>>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var servers = (dto ?? []).Select(s => new JellyseerrSonarrServer(s.Id, s.Name, s.IsDefault)).ToList();
+            return new JellyseerrSonarrLookupResult(true, servers, null, null);
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JellyseerrSonarrLookupResult(false, null, null, ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return new JellyseerrSonarrLookupResult(false, null, null, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<JellyseerrSonarrLookupResult> GetSonarrProfilesAsync(int sonarrServerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = CreateClient(out var baseUrl);
+            if (client is null)
+            {
+                return new JellyseerrSonarrLookupResult(false, null, null, "Jellyseerr is not configured.");
+            }
+
+            using var response = await client.GetAsync(BuildUrl(baseUrl, "service/sonarr/" + sonarrServerId.ToString(CultureInfo.InvariantCulture)), cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new JellyseerrSonarrLookupResult(false, null, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<RadarrServerDetailJson>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var profiles = (dto?.Profiles ?? []).Select(p => new JellyseerrSonarrProfile(p.Id, p.Name)).ToList();
+            return new JellyseerrSonarrLookupResult(true, null, profiles, null);
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JellyseerrSonarrLookupResult(false, null, null, ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return new JellyseerrSonarrLookupResult(false, null, null, ex.Message);
+        }
+    }
+
     /// <summary>
     /// Builds the HTTP client, or null if Jellyseerr isn't configured. The API key is set as a
     /// default request header here and nowhere logged (docs/implementation-plan.md §3.1's secrets
@@ -275,7 +351,7 @@ public sealed class JellyseerrClient : IJellyseerrClient
     private static string BuildUrl(string baseUrl, string relativePath) =>
         baseUrl.TrimEnd('/') + "/api/v1/" + relativePath.TrimStart('/');
 
-    private sealed record MovieDetailsJson([property: JsonPropertyName("mediaInfo")] MediaInfoJson? MediaInfo);
+    private sealed record MediaDetailsJson([property: JsonPropertyName("mediaInfo")] MediaInfoJson? MediaInfo);
 
     private sealed record MediaInfoJson([property: JsonPropertyName("status")] int Status);
 
@@ -287,7 +363,8 @@ public sealed class JellyseerrClient : IJellyseerrClient
         [property: JsonPropertyName("mediaType")] string MediaType,
         [property: JsonPropertyName("mediaId")] int MediaId,
         [property: JsonPropertyName("serverId")] int? ServerId,
-        [property: JsonPropertyName("profileId")] int? ProfileId);
+        [property: JsonPropertyName("profileId")] int? ProfileId,
+        [property: JsonPropertyName("seasons")] string? Seasons);
 
     private sealed record RadarrServerJson(
         [property: JsonPropertyName("id")] int Id,

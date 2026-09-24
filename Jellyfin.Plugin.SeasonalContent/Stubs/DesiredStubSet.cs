@@ -21,7 +21,7 @@ public static class DesiredStubSet
 
         foreach (var item in notOwnedItems)
         {
-            // Same convention as OwnedMovieIndex.Build: last one wins, arbitrarily.
+            // Same convention as OwnedItemIndex.Build: last one wins, arbitrarily.
             byTmdbId[item.TmdbId] = item;
         }
 

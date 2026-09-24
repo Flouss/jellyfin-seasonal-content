@@ -99,14 +99,14 @@ public class ListsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the stub root's full path, for the config page's "add this as a Movies library"
-    /// hint (docs/implementation-plan.md §3.2).
+    /// Returns both stub roots' full paths, for the config page's "add this as a library" hints
+    /// (docs/implementation-plan.md §3.2, docs/rename-tv-globalkey-plan.md §3).
     /// </summary>
-    /// <returns>The stub root's full path.</returns>
+    /// <returns>The movie and TV stub roots' full paths.</returns>
     [HttpGet("StubRootPath")]
     public ActionResult GetStubRootPath()
     {
-        return Ok(new { path = StubPath.GetRootPath() });
+        return Ok(new { path = StubPath.GetRootPath(), tvPath = StubPath.GetTvRootPath() });
     }
 
     /// <summary>

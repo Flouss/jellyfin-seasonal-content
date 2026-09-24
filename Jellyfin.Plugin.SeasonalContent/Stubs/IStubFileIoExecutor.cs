@@ -5,7 +5,7 @@ namespace Jellyfin.Plugin.SeasonalContent.Stubs;
 /// <summary>
 /// Reads and writes the stub root on disk. A thin IO shell around <see cref="StubReconciler"/>'s
 /// pure decisions - verified live (docs/implementation-plan.md §8), not unit tested, same
-/// convention as <c>Ownership.LibraryMovieCatalog</c>.
+/// convention as <c>Ownership.LibraryMediaCatalog</c>.
 /// </summary>
 public interface IStubFileIoExecutor
 {

@@ -1,0 +1,39 @@
+{
+  "movies": [],
+  "shows": [
+    {
+      "id": 79242,
+      "mediatype": "show",
+      "imdb_id": "tt7569592",
+      "tvdb_id": 338947,
+      "ids": {
+        "mdblist": "8h9b",
+        "imdb": "tt7569592",
+        "tmdb": 79242,
+        "tvdb": 338947
+      },
+      "title": "Chilling Adventures of Sabrina",
+      "release_year": 2018
+    },
+    {
+      "mediatype": "show",
+      "imdb_id": "tt4189022",
+      "tvdb_id": 296295,
+      "ids": {
+        "mdblist": "8py3",
+        "imdb": "tt4189022",
+        "tvdb": 296295
+      },
+      "title": "Ash vs Evil Dead",
+      "release_year": 2015
+    }
+  ],
+  "seasons": [],
+  "episodes": [],
+  "pagination": {
+    "offset": 0,
+    "limit": 2,
+    "total": 2,
+    "has_more": false
+  }
+}

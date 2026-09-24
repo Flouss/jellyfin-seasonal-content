@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.SeasonalContent.Lists;
 
 namespace Jellyfin.Plugin.SeasonalContent.Jellyseerr;
 
@@ -13,16 +14,17 @@ namespace Jellyfin.Plugin.SeasonalContent.Jellyseerr;
 public sealed record JellyseerrConnectionTestResult(bool Success, string Message);
 
 /// <summary>
-/// The result of <see cref="IJellyseerrClient.GetMovieStatusAsync"/>. <see cref="Success"/> is
-/// <see langword="false"/> only when the check itself failed (network error, non-success HTTP
-/// status) - never conflated with "no media info" (which is <see cref="Success"/> = true,
-/// <see cref="Status"/> = null), so a caller can never mistake a failed dedup check for "safe to
-/// request" (docs/implementation-plan.md §3.6's dedup requirement would be defeated by that).
+/// The result of <see cref="IJellyseerrClient.GetMovieStatusAsync"/>/<see cref="IJellyseerrClient.GetTvStatusAsync"/>.
+/// <see cref="Success"/> is <see langword="false"/> only when the check itself failed (network
+/// error, non-success HTTP status) - never conflated with "no media info" (which is
+/// <see cref="Success"/> = true, <see cref="Status"/> = null), so a caller can never mistake a
+/// failed dedup check for "safe to request" (docs/implementation-plan.md §3.6's dedup requirement
+/// would be defeated by that).
 /// </summary>
 /// <param name="Success">Whether the check itself succeeded.</param>
 /// <param name="Status">The title's current status, or <see langword="null"/> if Jellyseerr has never seen it.</param>
 /// <param name="ErrorMessage">Set when <see cref="Success"/> is <see langword="false"/>.</param>
-public sealed record JellyseerrMovieStatusResult(bool Success, JellyseerrMediaStatus? Status, string? ErrorMessage);
+public sealed record JellyseerrMediaStatusResult(bool Success, JellyseerrMediaStatus? Status, string? ErrorMessage);
 
 /// <summary>
 /// The result of <see cref="IJellyseerrClient.FindUserByJellyfinIdAsync"/>.
@@ -73,6 +75,37 @@ public sealed record JellyseerrRadarrLookupResult(
     string? ErrorMessage);
 
 /// <summary>
+/// One configured Sonarr server, for the config page's server dropdown. Same shape as
+/// <see cref="JellyseerrRadarrServer"/>, kept as a separate type since Sonarr and Radarr servers
+/// have independent id spaces in Jellyseerr - never interchangeable (docs/rename-tv-globalkey-plan.md).
+/// </summary>
+/// <param name="Id">The Sonarr server's Jellyseerr-assigned id.</param>
+/// <param name="Name">The display name.</param>
+/// <param name="IsDefault">Whether this is Jellyseerr's default server.</param>
+public sealed record JellyseerrSonarrServer(int Id, string Name, bool IsDefault);
+
+/// <summary>
+/// One quality profile on a configured Sonarr server.
+/// </summary>
+/// <param name="Id">The profile's id.</param>
+/// <param name="Name">The display name.</param>
+public sealed record JellyseerrSonarrProfile(int Id, string Name);
+
+/// <summary>
+/// The result of <see cref="IJellyseerrClient.GetSonarrServersAsync"/> and
+/// <see cref="IJellyseerrClient.GetSonarrProfilesAsync"/>.
+/// </summary>
+/// <param name="Success">Whether the call succeeded.</param>
+/// <param name="Servers">The Sonarr servers, when listing servers.</param>
+/// <param name="Profiles">The server's quality profiles, when listing profiles.</param>
+/// <param name="ErrorMessage">Set when <see cref="Success"/> is <see langword="false"/>.</param>
+public sealed record JellyseerrSonarrLookupResult(
+    bool Success,
+    IReadOnlyList<JellyseerrSonarrServer>? Servers,
+    IReadOnlyList<JellyseerrSonarrProfile>? Profiles,
+    string? ErrorMessage);
+
+/// <summary>
 /// Thin client over Jellyseerr's public API (docs/decisions.md "M5 API surface" - shapes verified
 /// against the real published OpenAPI spec, not guessed). A thin IO shell, verified live
 /// (docs/implementation-plan.md §8), not unit tested.
@@ -94,7 +127,16 @@ public interface IJellyseerrClient
     /// <param name="tmdbId">The TMDb id.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The status result.</returns>
-    Task<JellyseerrMovieStatusResult> GetMovieStatusAsync(int tmdbId, CancellationToken cancellationToken);
+    Task<JellyseerrMediaStatusResult> GetMovieStatusAsync(int tmdbId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets a TV series' current Jellyseerr status, for the dedup check (§3.6) - the TV
+    /// counterpart of <see cref="GetMovieStatusAsync"/> (<c>GET /tv/{tmdbId}</c>).
+    /// </summary>
+    /// <param name="tmdbId">The TMDb id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The status result.</returns>
+    Task<JellyseerrMediaStatusResult> GetTvStatusAsync(int tmdbId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Finds the Jellyseerr user linked to a Jellyfin user id, via <c>GET /user/jellyfin/{id}</c>.
@@ -107,17 +149,21 @@ public interface IJellyseerrClient
     Task<JellyseerrUserLookupResult> FindUserByJellyfinIdAsync(Guid jellyfinUserId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Creates a movie request attributed to the given Jellyseerr user, per Option A+
+    /// Creates a request attributed to the given Jellyseerr user, per Option A+
     /// (docs/implementation-plan.md §5): fire-and-forget, left for an approver to adjust and
-    /// approve. Optionally targets a configured Radarr server/profile.
+    /// approve. Optionally targets a configured Radarr (movie) or Sonarr (TV) server/profile - the
+    /// two id spaces are independent, so the caller must pass the one matching <paramref name="kind"/>,
+    /// never the other (docs/rename-tv-globalkey-plan.md). A TV request always requests every
+    /// season (<c>seasons: "all"</c>) - no per-season granularity in v1.
     /// </summary>
     /// <param name="tmdbId">The TMDb id.</param>
+    /// <param name="kind">Whether this is a movie or a TV series request.</param>
     /// <param name="jellyseerrUserId">The requesting Jellyseerr user's numeric id.</param>
-    /// <param name="radarrServerId">The configured Radarr server id, if any.</param>
-    /// <param name="radarrProfileId">The configured Radarr quality profile id, if any.</param>
+    /// <param name="serverId">The configured Radarr/Sonarr server id (matching <paramref name="kind"/>), if any.</param>
+    /// <param name="profileId">The configured Radarr/Sonarr quality profile id (matching <paramref name="kind"/>), if any.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The create result.</returns>
-    Task<JellyseerrCreateRequestResult> CreateRequestAsync(int tmdbId, int jellyseerrUserId, int? radarrServerId, int? radarrProfileId, CancellationToken cancellationToken);
+    Task<JellyseerrCreateRequestResult> CreateRequestAsync(int tmdbId, MediaKind kind, int jellyseerrUserId, int? serverId, int? profileId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Lists Jellyseerr's configured Radarr servers, for the config page's server dropdown
@@ -134,4 +180,19 @@ public interface IJellyseerrClient
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The lookup result, with <see cref="JellyseerrRadarrLookupResult.Profiles"/> set.</returns>
     Task<JellyseerrRadarrLookupResult> GetRadarrProfilesAsync(int radarrServerId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists Jellyseerr's configured Sonarr servers, for the config page's server dropdown.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The lookup result, with <see cref="JellyseerrSonarrLookupResult.Servers"/> set.</returns>
+    Task<JellyseerrSonarrLookupResult> GetSonarrServersAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists a Sonarr server's quality profiles, for the config page's profile dropdown.
+    /// </summary>
+    /// <param name="sonarrServerId">The Sonarr server's Jellyseerr-assigned id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The lookup result, with <see cref="JellyseerrSonarrLookupResult.Profiles"/> set.</returns>
+    Task<JellyseerrSonarrLookupResult> GetSonarrProfilesAsync(int sonarrServerId, CancellationToken cancellationToken);
 }

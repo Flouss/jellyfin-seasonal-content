@@ -13,9 +13,10 @@ public sealed record LibrarySetupStepResult(bool Created, string Message);
 /// <summary>
 /// The outcome of a full <see cref="ILibrarySetupService.SetupAsync"/> call.
 /// </summary>
-/// <param name="StubLibrary">The stub (Movies-type) library step's outcome.</param>
+/// <param name="StubLibrary">The movie stub (Movies-type) library step's outcome.</param>
+/// <param name="TvStubLibrary">The TV stub (Series-type) library step's outcome.</param>
 /// <param name="CollectionsLibrary">The Collections (boxsets-type) library step's outcome.</param>
-public sealed record LibrarySetupResult(LibrarySetupStepResult StubLibrary, LibrarySetupStepResult CollectionsLibrary);
+public sealed record LibrarySetupResult(LibrarySetupStepResult StubLibrary, LibrarySetupStepResult TvStubLibrary, LibrarySetupStepResult CollectionsLibrary);
 
 /// <summary>
 /// Creates the libraries this plugin needs to work correctly (docs/implementation-plan.md's

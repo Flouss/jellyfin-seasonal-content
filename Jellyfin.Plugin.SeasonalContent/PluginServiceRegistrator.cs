@@ -26,8 +26,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<IMdbListApiClient, MdbListApiClient>();
         serviceCollection.AddSingleton<IListSource, MdbListSource>();
-        serviceCollection.AddScoped<IMovieCatalog, LibraryMovieCatalog>();
+        serviceCollection.AddScoped<IMediaCatalog, LibraryMediaCatalog>();
         serviceCollection.AddScoped<IStubFileIoExecutor, StubFileIoExecutor>();
+        serviceCollection.AddScoped<ITvStubFileIoExecutor, TvStubFileIoExecutor>();
         serviceCollection.AddScoped<IStubLibraryScanner, StubLibraryScanner>();
         serviceCollection.AddScoped<ICollectionReconciler, CollectionReconciler>();
         serviceCollection.AddScoped<ILibrarySetupService, LibrarySetupService>();
