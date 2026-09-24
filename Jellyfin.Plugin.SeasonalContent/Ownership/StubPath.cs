@@ -43,6 +43,17 @@ public static class StubPath
         return normalizedItem.StartsWith(rootWithSeparator, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Determines whether two paths refer to the same location, ignoring separator style and a
+    /// trailing slash. Used by <see cref="Setup.LibrarySetupPlan"/> to detect whether a library
+    /// already exists at the stub root without a brittle exact string comparison.
+    /// </summary>
+    /// <param name="first">The first path.</param>
+    /// <param name="second">The second path.</param>
+    /// <returns><see langword="true"/> if both paths normalize to the same value.</returns>
+    public static bool PathsEqual(string first, string second) =>
+        Normalize(first).Equals(Normalize(second), StringComparison.Ordinal);
+
     private static string Normalize(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/');
 }

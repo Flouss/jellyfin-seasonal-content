@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The main project excludes Jellyfin.Model's runtime asset (it runs inside the real
+         Jellyfin host, which already provides it) - but tests run standalone via `dotnet test`,
+         so LibrarySetupPlanTests (the first test to construct a real Jellyfin model type,
+         VirtualFolderInfo, instead of only this plugin's own types) needs its own copy at
+         runtime. -->
+    <PackageReference Include="Jellyfin.Model" Version="12.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0">

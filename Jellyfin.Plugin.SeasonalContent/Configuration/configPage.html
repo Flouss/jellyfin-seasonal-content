@@ -51,14 +51,22 @@
                     <div class="verticalSection">
                         <h2>Stub library</h2>
                         <div class="fieldDescription">
-                            Add this exact path once, on this server, as a <strong>Movies</strong>-type library
-                            (Dashboard &rarr; Libraries &rarr; Add Media Library), with the TMDb metadata fetcher
-                            enabled. Every restricted user also needs explicit access granted to it, or their
-                            collections will silently show missing stubs.
+                            This plugin needs a <strong>Movies</strong>-type library at the path below (with the
+                            TMDb metadata fetcher enabled) and a <strong>Collections</strong> library so the
+                            seasonal BoxSets it creates are browsable. Click "Set up libraries" to create
+                            whichever of the two don't already exist - safe to click again later, it skips
+                            anything already set up. Every restricted user still needs explicit access granted
+                            to the stub library by hand, or their collections will silently show missing stubs.
                         </div>
                         <div class="inputContainer">
                             <input id="StubRootPathDisplay" type="text" is="emby-input" readonly />
                         </div>
+                        <div>
+                            <button id="btnSetupLibraries" is="emby-button" type="button" class="raised button-submit block emby-button">
+                                <span>Set up libraries</span>
+                            </button>
+                        </div>
+                        <div id="setupLibrariesResult" class="fieldDescription" hidden></div>
                     </div>
 
                     <div class="verticalSection">
@@ -414,6 +422,32 @@
                         .catch(function (err) {
                             resultEl.style.color = '#cc3333';
                             resultEl.textContent = 'Request failed: ' + err;
+                            Dashboard.hideLoadingMsg();
+                        });
+                });
+
+                document.querySelector('#btnSetupLibraries').addEventListener('click', function () {
+                    var resultEl = document.querySelector('#setupLibrariesResult');
+                    resultEl.hidden = false;
+                    resultEl.style.color = '';
+                    resultEl.textContent = 'Setting up…';
+                    Dashboard.showLoadingMsg();
+
+                    var url = ApiClient.getUrl('SeasonalContent/SetupLibraries');
+                    ApiClient.ajax({ type: 'POST', url: url, dataType: 'json' })
+                        .then(function (res) {
+                            resultEl.style.color = '#00a651';
+                            resultEl.textContent = 'Stub library: ' + res.StubLibrary.Message + ' Collections library: ' + res.CollectionsLibrary.Message;
+                        })
+                        .catch(function (err) {
+                            return describeAjaxError(err, function (body) {
+                                return body && body.errors && body.errors.join('; ');
+                            }).then(function (msg) {
+                                resultEl.style.color = '#cc3333';
+                                resultEl.textContent = 'Setup failed: ' + msg;
+                            });
+                        })
+                        .then(function () {
                             Dashboard.hideLoadingMsg();
                         });
                 });
