@@ -229,6 +229,22 @@
                     });
                 }
 
+                // ApiClient.ajax() rejects a non-2xx response with the raw fetch Response object
+                // (jellyfin-apiclient's fetchWithFailover: `Promise.reject(response)`), not a
+                // jQuery-style jqXHR with .responseJSON - so String(err) always produced
+                // "[object Response]" and the real server-side error was never shown. This reads
+                // the real body back out.
+                function describeAjaxError(err, extractMessage) {
+                    if (err && typeof err.json === 'function') {
+                        return err.json().then(function (body) {
+                            return extractMessage(body) || ('HTTP ' + err.status);
+                        }).catch(function () {
+                            return err.status ? ('HTTP ' + err.status) : String(err);
+                        });
+                    }
+                    return Promise.resolve(String(err));
+                }
+
                 function saveLists() {
                     var url = ApiClient.getUrl('SeasonalContent/Lists');
                     var body = collectListInputs();
@@ -330,8 +346,11 @@
                             document.querySelector('#JellyseerrRadarrServerId').value,
                             document.querySelector('#JellyseerrRadarrProfileId').value);
                     }).catch(function (err) {
-                        var msg = (err && err.responseJSON && err.responseJSON.Message) || String(err);
-                        showResult(resultEl, false, 'Failed: ' + msg);
+                        return describeAjaxError(err, function (body) {
+                            return body && body.Message;
+                        }).then(function (msg) {
+                            showResult(resultEl, false, 'Failed: ' + msg);
+                        });
                     }).then(function () {
                         Dashboard.hideLoadingMsg();
                     });
@@ -432,8 +451,11 @@
                         }).then(function () {
                             showResult(saveResultEl, true, 'Saved.');
                         }).catch(function (err) {
-                            var msg = (err && err.responseJSON && err.responseJSON.errors && err.responseJSON.errors.join('; ')) || String(err);
-                            showResult(saveResultEl, false, 'Save failed: ' + msg);
+                            return describeAjaxError(err, function (body) {
+                                return body && body.errors && body.errors.join('; ');
+                            }).then(function (msg) {
+                                showResult(saveResultEl, false, 'Save failed: ' + msg);
+                            });
                         }).then(function () {
                             Dashboard.hideLoadingMsg();
                         });
