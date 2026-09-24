@@ -37,7 +37,7 @@ public static class ConfigMigration
         if (string.IsNullOrWhiteSpace(config.MdbListApiKey) && legacyKeys.Count > 0)
         {
             // First non-empty key wins, arbitrarily - same "last/first one wins" convention as
-            // OwnedMovieIndex/DesiredStubSet use for their own dedup collisions.
+            // OwnedItemIndex/DesiredStubSet use for their own dedup collisions.
             config.MdbListApiKey = legacyKeys[0];
             changed = true;
         }

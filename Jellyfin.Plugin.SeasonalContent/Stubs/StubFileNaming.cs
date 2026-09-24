@@ -32,7 +32,7 @@ public static class StubFileNaming
     /// <returns>The file name, including the <c>.strm</c> extension.</returns>
     public static string BuildFileName(string title, int? year, int tmdbId)
     {
-        var sanitisedTitle = Sanitise(title).Trim();
+        var sanitisedTitle = SanitiseForFileName(title).Trim();
 
         var pieces = new List<string>();
         if (!string.IsNullOrEmpty(sanitisedTitle))
@@ -66,7 +66,14 @@ public static class StubFileNaming
             : null;
     }
 
-    private static string Sanitise(string title)
+    /// <summary>
+    /// Strips Windows-reserved/control characters from a title so it's safe to use as (part of) a
+    /// file or folder name - the single source for this, shared with <see cref="TvStubFileNaming"/>
+    /// (rule: don't re-derive a security-relevant sanitizer per call site).
+    /// </summary>
+    /// <param name="title">The raw title, from an external source (the MDBList API).</param>
+    /// <returns>The sanitised title. May be empty if every character was invalid.</returns>
+    public static string SanitiseForFileName(string title)
     {
         var builder = new StringBuilder(title.Length);
         foreach (var c in title)

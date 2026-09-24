@@ -13,14 +13,24 @@ namespace Jellyfin.Plugin.SeasonalContent.Ownership;
 public static class StubPath
 {
     private const string RootFolderName = "movies_seasonal";
+    private const string TvRootFolderName = "tv_seasonal";
 
     /// <summary>
-    /// Computes the configured stub root's full path: <c>Plugin.DataFolderPath/movies_seasonal</c>.
-    /// Single-sourced here rather than recomputed at each call site (the sync task, the playback
-    /// interceptor, and the config page's path hint all need the same value).
+    /// Computes the configured movie stub root's full path:
+    /// <c>Plugin.DataFolderPath/movies_seasonal</c>. Single-sourced here rather than recomputed at
+    /// each call site (the sync task, the playback interceptor, and the config page's path hint all
+    /// need the same value).
     /// </summary>
-    /// <returns>The stub root's full path.</returns>
+    /// <returns>The movie stub root's full path.</returns>
     public static string GetRootPath() => Path.Combine(Plugin.Instance!.DataFolderPath, RootFolderName);
+
+    /// <summary>
+    /// Computes the configured TV stub root's full path: <c>Plugin.DataFolderPath/tv_seasonal</c> -
+    /// a sibling of, and always distinct from, <see cref="GetRootPath"/>, so a movie stub library
+    /// and a TV stub library never share content (docs/rename-tv-globalkey-plan.md).
+    /// </summary>
+    /// <returns>The TV stub root's full path.</returns>
+    public static string GetTvRootPath() => Path.Combine(Plugin.Instance!.DataFolderPath, TvRootFolderName);
 
     /// <summary>
     /// Determines whether <paramref name="itemPath"/> is the stub root itself or lies inside it,

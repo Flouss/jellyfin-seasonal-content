@@ -63,4 +63,29 @@ public class JellyseerrController : ControllerBase
         var result = await _jellyseerrClient.GetRadarrProfilesAsync(radarrServerId, cancellationToken).ConfigureAwait(false);
         return result.Success ? Ok(result.Profiles) : BadRequest(new { message = result.ErrorMessage });
     }
+
+    /// <summary>
+    /// Lists Jellyseerr's configured Sonarr servers, for the config page's server dropdown.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The servers, or a 400 with an error message.</returns>
+    [HttpGet("Jellyseerr/SonarrServers")]
+    public async Task<ActionResult> GetSonarrServers(CancellationToken cancellationToken)
+    {
+        var result = await _jellyseerrClient.GetSonarrServersAsync(cancellationToken).ConfigureAwait(false);
+        return result.Success ? Ok(result.Servers) : BadRequest(new { message = result.ErrorMessage });
+    }
+
+    /// <summary>
+    /// Lists a Sonarr server's quality profiles, for the config page's profile dropdown.
+    /// </summary>
+    /// <param name="sonarrServerId">The Sonarr server's Jellyseerr-assigned id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The profiles, or a 400 with an error message.</returns>
+    [HttpGet("Jellyseerr/SonarrServers/{sonarrServerId}/Profiles")]
+    public async Task<ActionResult> GetSonarrProfiles([FromRoute] int sonarrServerId, CancellationToken cancellationToken)
+    {
+        var result = await _jellyseerrClient.GetSonarrProfilesAsync(sonarrServerId, cancellationToken).ConfigureAwait(false);
+        return result.Success ? Ok(result.Profiles) : BadRequest(new { message = result.ErrorMessage });
+    }
 }

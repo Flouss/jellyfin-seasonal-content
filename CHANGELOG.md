@@ -4,12 +4,24 @@ All notable changes to this plugin are documented here.
 
 ## Unreleased
 
-Not yet released to the plugin catalog. Everything below has been built and live-verified against
-a real Jellyfin 12.1.0 server, but the version number stays `0.1.0.0` until the remaining
-release-prep steps (a tagged GitHub release, a hosted plugin repository manifest, a catalog
-install test) are complete.
+### Changed
+
+- **Renamed the plugin to "Smarter Collections"** (display name and catalog listing only - a wink
+  at [johnpc/jellyfin-plugin-smart-collections](https://github.com/johnpc/jellyfin-plugin-smart-collections),
+  since this plugin does the same job: mdblist lists → collections → Jellyseerr requests).
+- **MDBList API key is now global**, one key shared by every list, instead of one per list. An
+  existing install migrates automatically on first startup after upgrading; the per-list field is
+  removed from the config page.
 
 ### Added
+
+- **TV show support.** A configured list can now contain both movies and TV shows (MDBList already
+  returns both); not-owned shows get a placeholder series (one dummy episode) in a separate TV
+  stub library, and pressing Play on one requests the whole series through Jellyseerr (Sonarr
+  server/quality profile configurable, separately from Radarr's). "Set up libraries" now creates
+  both stub libraries plus Collections in one step.
+
+## 0.1.0.0
 
 - Curated MDBList lists as native Jellyfin Collections, one BoxSet per configured list, shared
   across lists via one stub folder keyed by TMDb id.

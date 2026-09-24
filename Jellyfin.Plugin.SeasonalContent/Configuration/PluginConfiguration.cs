@@ -65,6 +65,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public int? JellyseerrRadarrProfileId { get; set; }
 
     /// <summary>
+    /// Gets or sets the Sonarr server id to request TV shows against, or null to use Jellyseerr's
+    /// own default. Separate from <see cref="JellyseerrRadarrServerId"/> - Sonarr and Radarr
+    /// servers have independent id spaces in Jellyseerr, never mixed (docs/rename-tv-globalkey-plan.md).
+    /// </summary>
+    public int? JellyseerrSonarrServerId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Sonarr quality profile id to request TV shows with, or null to use
+    /// Jellyseerr's own default.
+    /// </summary>
+    public int? JellyseerrSonarrProfileId { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether a playing user with no Jellyseerr account should be
     /// auto-imported (§3.6 policy (i)) rather than told to ask an admin (policy (ii), the default
     /// - and the only one implemented in M5; this flag is reserved for a future opt-in toggle).
