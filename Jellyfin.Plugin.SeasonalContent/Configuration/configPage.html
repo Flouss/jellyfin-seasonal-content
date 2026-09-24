@@ -121,6 +121,29 @@
                             <label class="inputLabel inputLabelUnfocused" for="PlaybackStopDelaySeconds">Playback stop delay (seconds)</label>
                             <input id="PlaybackStopDelaySeconds" name="PlaybackStopDelaySeconds" type="number" is="emby-input" min="0" max="30" />
                         </div>
+
+                        <h3>Extra movie quality profiles (optional)</h3>
+                        <div class="fieldDescription">
+                            Add one or more extra Radarr server/profile pairs to offer a quality version
+                            picker on movie playback (the picker also needs the Radarr server and profile
+                            above set, as the default version). Leave empty to keep one plain stub per
+                            movie with no picker.
+                        </div>
+                        <div id="extraMovieProfilesContainer"></div>
+                        <div>
+                            <button id="btnAddExtraMovieProfile" is="emby-button" type="button" class="raised block emby-button">
+                                <span>+ Add movie quality profile</span>
+                            </button>
+                        </div>
+
+                        <h3>Extra TV quality profiles (optional)</h3>
+                        <div class="fieldDescription">Same as above, for TV shows (Sonarr).</div>
+                        <div id="extraTvProfilesContainer"></div>
+                        <div>
+                            <button id="btnAddExtraTvProfile" is="emby-button" type="button" class="raised block emby-button">
+                                <span>+ Add TV quality profile</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="verticalSection">
@@ -148,7 +171,10 @@
 
                 var savedLists = [];      // last-loaded list rows, from GET SeasonalContent/Lists (ApiKey masked)
                 var radarrServers = [];   // last-loaded Radarr servers
+                var sonarrServers = [];   // last-loaded Sonarr servers
                 var listRowSeq = 0;
+                var extraMovieProfileRowSeq = 0;
+                var extraTvProfileRowSeq = 0;
 
                 function updateStubUrlWarning() {
                     var empty = document.querySelector('#StubBaseUrl').value.trim() === '';
@@ -343,6 +369,7 @@
                 function loadSonarrServers(preselectServerId, preselectProfileId) {
                     var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/SonarrServers');
                     return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (servers) {
+                        sonarrServers = servers;
                         populateServerDropdown('#JellyseerrSonarrServerId', servers, preselectServerId);
                         if (preselectServerId !== null && preselectServerId !== undefined && preselectServerId !== '') {
                             return loadSonarrProfiles(preselectServerId, preselectProfileId);
@@ -364,6 +391,124 @@
                         populateProfileDropdown('#JellyseerrSonarrProfileId', [], null);
                     });
                 }
+
+                // ---- Extra quality profiles (movie/TV version picker) ----
+
+                function populateServerSelectEl(selectEl, servers, selectedId) {
+                    selectEl.innerHTML = '<option value="">Choose a server…</option>';
+                    servers.forEach(function (s) {
+                        var opt = document.createElement('option');
+                        opt.value = s.Id;
+                        opt.textContent = s.Name + (s.IsDefault ? ' (Jellyseerr default)' : '');
+                        selectEl.appendChild(opt);
+                    });
+                    if (selectedId !== null && selectedId !== undefined) {
+                        selectEl.value = String(selectedId);
+                    }
+                }
+
+                function populateProfileSelectEl(selectEl, profiles, selectedId) {
+                    selectEl.innerHTML = '<option value="">Choose a profile…</option>';
+                    profiles.forEach(function (p) {
+                        var opt = document.createElement('option');
+                        opt.value = p.Id;
+                        opt.textContent = p.Name;
+                        selectEl.appendChild(opt);
+                    });
+                    if (selectedId !== null && selectedId !== undefined) {
+                        selectEl.value = String(selectedId);
+                    }
+                }
+
+                function loadProfilesForRow(kind, serverSelectEl, profileSelectEl, preselectProfileId) {
+                    var serverId = serverSelectEl.value;
+                    if (serverId === '') {
+                        populateProfileSelectEl(profileSelectEl, [], null);
+                        return Promise.resolve();
+                    }
+                    var path = kind === 'tv'
+                        ? 'SeasonalContent/Jellyseerr/SonarrServers/' + encodeURIComponent(serverId) + '/Profiles'
+                        : 'SeasonalContent/Jellyseerr/RadarrServers/' + encodeURIComponent(serverId) + '/Profiles';
+                    var url = ApiClient.getUrl(path);
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (profiles) {
+                        populateProfileSelectEl(profileSelectEl, profiles, preselectProfileId);
+                    }).catch(function () {
+                        populateProfileSelectEl(profileSelectEl, [], null);
+                    });
+                }
+
+                function extraProfilesContainerSelector(kind) {
+                    return kind === 'tv' ? '#extraTvProfilesContainer' : '#extraMovieProfilesContainer';
+                }
+
+                function renderExtraProfileRow(kind, profile) {
+                    if (kind === 'tv') {
+                        extraTvProfileRowSeq++;
+                    } else {
+                        extraMovieProfileRowSeq++;
+                    }
+
+                    var wrap = document.createElement('div');
+                    wrap.className = 'paperList';
+                    wrap.style.cssText = 'border:1px solid rgba(255,255,255,0.15);border-radius:0.3em;padding:1em;margin-bottom:1em;';
+
+                    wrap.innerHTML =
+                        '<div class="selectContainer">' +
+                        '  <select class="extra-profile-server" is="emby-select" label="Server">' +
+                        '    <option value="">Choose a server…</option>' +
+                        '  </select>' +
+                        '</div>' +
+                        '<div class="selectContainer">' +
+                        '  <select class="extra-profile-profile" is="emby-select" label="Quality profile">' +
+                        '    <option value="">Choose a profile…</option>' +
+                        '  </select>' +
+                        '</div>' +
+                        '<button type="button" class="extra-profile-remove raised button-delete block emby-button"><span>Remove profile</span></button>';
+
+                    var serverSelect = wrap.querySelector('.extra-profile-server');
+                    var profileSelect = wrap.querySelector('.extra-profile-profile');
+                    var servers = kind === 'tv' ? sonarrServers : radarrServers;
+                    populateServerSelectEl(serverSelect, servers, profile.ServerId);
+                    if (profile.ServerId !== null && profile.ServerId !== undefined) {
+                        loadProfilesForRow(kind, serverSelect, profileSelect, profile.ProfileId);
+                    }
+
+                    serverSelect.addEventListener('change', function () {
+                        loadProfilesForRow(kind, serverSelect, profileSelect, null);
+                    });
+
+                    wrap.querySelector('.extra-profile-remove').addEventListener('click', function () {
+                        wrap.remove();
+                    });
+
+                    document.querySelector(extraProfilesContainerSelector(kind)).appendChild(wrap);
+                }
+
+                function renderExtraProfiles(kind, profiles) {
+                    document.querySelector(extraProfilesContainerSelector(kind)).innerHTML = '';
+                    (profiles || []).forEach(function (p) { renderExtraProfileRow(kind, p); });
+                }
+
+                function collectExtraProfileInputs(kind) {
+                    return Array.prototype.map.call(
+                        document.querySelectorAll(extraProfilesContainerSelector(kind) + ' > div'),
+                        function (wrap) {
+                            return {
+                                ServerId: parseInt(wrap.querySelector('.extra-profile-server').value, 10),
+                                ProfileId: parseInt(wrap.querySelector('.extra-profile-profile').value, 10)
+                            };
+                        }).filter(function (p) {
+                        return !isNaN(p.ServerId) && !isNaN(p.ProfileId);
+                    });
+                }
+
+                document.querySelector('#btnAddExtraMovieProfile').addEventListener('click', function () {
+                    renderExtraProfileRow('movie', {});
+                });
+
+                document.querySelector('#btnAddExtraTvProfile').addEventListener('click', function () {
+                    renderExtraProfileRow('tv', {});
+                });
 
                 document.querySelector('#JellyseerrRadarrServerId').addEventListener('change', function (e) {
                     loadRadarrProfiles(e.target.value, null);
@@ -434,7 +579,10 @@
                             return Promise.all([
                                 loadRadarrServers(config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId),
                                 loadSonarrServers(config.JellyseerrSonarrServerId, config.JellyseerrSonarrProfileId)
-                            ]);
+                            ]).then(function () {
+                                renderExtraProfiles('movie', config.ExtraMovieProfiles);
+                                renderExtraProfiles('tv', config.ExtraTvProfiles);
+                            });
                         });
 
                         var listsPromise = loadLists();
@@ -544,6 +692,9 @@
 
                             config.PlaybackStopDelaySeconds = parseInt(document.querySelector('#PlaybackStopDelaySeconds').value, 10) || 0;
                             config.RemoveCollectionWhenListDisabled = document.querySelector('#RemoveCollectionWhenListDisabled').checked;
+
+                            config.ExtraMovieProfiles = collectExtraProfileInputs('movie');
+                            config.ExtraTvProfiles = collectExtraProfileInputs('tv');
 
                             return ApiClient.updatePluginConfiguration(SeasonalContentConfig.pluginUniqueId, config);
                         }).then(function (result) {

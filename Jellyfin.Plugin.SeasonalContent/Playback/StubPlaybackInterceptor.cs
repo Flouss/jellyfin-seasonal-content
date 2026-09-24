@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.SeasonalContent.Configuration;
 using Jellyfin.Plugin.SeasonalContent.Jellyseerr;
 using Jellyfin.Plugin.SeasonalContent.Lists;
 using Jellyfin.Plugin.SeasonalContent.Ownership;
+using Jellyfin.Plugin.SeasonalContent.RequestProfiles;
 using Jellyfin.Plugin.SeasonalContent.Stubs;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -35,6 +39,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
     private readonly IUserDataManager _userDataManager;
     private readonly ILibraryManager _libraryManager;
     private readonly IJellyseerrClient _jellyseerrClient;
+    private readonly IRequestProfileResolver _requestProfileResolver;
     private readonly PlaybackRateLimiter _rateLimiter;
     private readonly ILogger<StubPlaybackInterceptor> _logger;
 
@@ -47,6 +52,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface - used
     /// to resolve a played TV stub episode's parent Series and read its real TMDb provider id.</param>
     /// <param name="jellyseerrClient">Instance of the <see cref="IJellyseerrClient"/> interface.</param>
+    /// <param name="requestProfileResolver">Instance of the <see cref="IRequestProfileResolver"/> interface.</param>
     /// <param name="logger">Instance of the <see cref="ILogger{TCategoryName}"/> interface.</param>
     public StubPlaybackInterceptor(
         ISessionManager sessionManager,
@@ -54,6 +60,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
         IUserDataManager userDataManager,
         ILibraryManager libraryManager,
         IJellyseerrClient jellyseerrClient,
+        IRequestProfileResolver requestProfileResolver,
         ILogger<StubPlaybackInterceptor> logger)
     {
         _sessionManager = sessionManager;
@@ -61,6 +68,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
         _userDataManager = userDataManager;
         _libraryManager = libraryManager;
         _jellyseerrClient = jellyseerrClient;
+        _requestProfileResolver = requestProfileResolver;
         _rateLimiter = new PlaybackRateLimiter(new SystemClock(), RateLimitWindow);
         _logger = logger;
     }
@@ -182,9 +190,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
         }
 
         var config = Plugin.Instance!.Configuration;
-        var (serverId, profileId) = kind.Value == MediaKind.Series
-            ? (config.JellyseerrSonarrServerId, config.JellyseerrSonarrProfileId)
-            : (config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId);
+        var (serverId, profileId) = await ResolveRequestTargetAsync(kind.Value, item, e.MediaSourceId, config).ConfigureAwait(false);
 
         var createResult = await _jellyseerrClient
             .CreateRequestAsync(tmdbId.Value, kind.Value, userLookup.JellyseerrUserId!.Value, serverId, profileId, CancellationToken.None)
@@ -273,6 +279,66 @@ public sealed class StubPlaybackInterceptor : IHostedService
         }
 
         return StubFileNaming.TryParseTmdbId(Path.GetFileName(item.Path ?? string.Empty));
+    }
+
+    /// <summary>
+    /// Resolves which Radarr/Sonarr server+profile to request against: the admin's default fields,
+    /// unless the played item has multiple alternate versions (the quality picker,
+    /// docs/decisions.md "M5a spike finding") and the user's chosen one - read from
+    /// <paramref name="mediaSourceId"/>, cross-referenced against the item's own
+    /// <see cref="BaseItem.GetMediaSources"/> to recover the version's display name (never
+    /// <c>Item.Path</c>, which never varies by version) - matches a currently-configured extra
+    /// profile. Falls back to the default fields whenever that match can't be made (no extras
+    /// configured, only one version, a stale/renamed profile, or a live Jellyseerr failure) rather
+    /// than failing the request outright.
+    /// </summary>
+    private async Task<(int? ServerId, int? ProfileId)> ResolveRequestTargetAsync(MediaKind kind, BaseItem item, string? mediaSourceId, PluginConfiguration config)
+    {
+        var (defaultServerId, defaultProfileId, extraProfiles) = kind == MediaKind.Series
+            ? (config.JellyseerrSonarrServerId, config.JellyseerrSonarrProfileId, config.ExtraTvProfiles)
+            : (config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId, config.ExtraMovieProfiles);
+
+        if (extraProfiles.Count == 0 || string.IsNullOrEmpty(mediaSourceId) || defaultServerId is null || defaultProfileId is null)
+        {
+            return (defaultServerId, defaultProfileId);
+        }
+
+        var mediaSources = item.GetMediaSources(enablePathSubstitution: false);
+        if (mediaSources.Count < 2)
+        {
+            return (defaultServerId, defaultProfileId);
+        }
+
+        var chosen = mediaSources.FirstOrDefault(m => m.Id == mediaSourceId);
+        if (chosen is null || string.IsNullOrEmpty(chosen.Name))
+        {
+            return (defaultServerId, defaultProfileId);
+        }
+
+        var candidates = new List<RequestProfile> { new() { ServerId = defaultServerId.Value, ProfileId = defaultProfileId.Value } };
+        candidates.AddRange(extraProfiles);
+
+        var result = await _requestProfileResolver.ResolveAsync(kind, candidates, CancellationToken.None).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            _logger.LogWarning(
+                "{Kind}: failed to resolve request profiles from Jellyseerr while handling playback ({Error}) - requesting with the default profile instead.",
+                kind,
+                result.ErrorMessage);
+            return (defaultServerId, defaultProfileId);
+        }
+
+        var matched = result.Profiles.FirstOrDefault(p => p.Label == chosen.Name);
+        if (matched is null)
+        {
+            _logger.LogWarning(
+                "{Kind}: played version '{Name}' does not match any currently configured request profile - requesting with the default profile instead.",
+                kind,
+                chosen.Name);
+            return (defaultServerId, defaultProfileId);
+        }
+
+        return (matched.ServerId, matched.ProfileId);
     }
 
     private Task SendMessageAsync(string sessionId, string header, string text) =>

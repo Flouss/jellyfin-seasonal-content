@@ -36,10 +36,29 @@ public static class TvStubFileNaming
     /// <returns>A relative path of the form <c>Season 01/{title} S01E01 [tmdbid-X].strm</c>.</returns>
     public static string BuildEpisodeRelativePath(string title, int tmdbId)
     {
-        var sanitisedTitle = StubFileNaming.SanitiseForFileName(title).Trim();
-        var namePrefix = string.IsNullOrEmpty(sanitisedTitle) ? "S01E01" : sanitisedTitle + " S01E01";
-        var fileName = string.Format(CultureInfo.InvariantCulture, "{0} [tmdbid-{1}].strm", namePrefix, tmdbId);
+        var fileName = string.Format(CultureInfo.InvariantCulture, "{0} [tmdbid-{1}].strm", BuildEpisodeNamePrefix(title), tmdbId);
         return Path.Combine(SeasonFolderName, fileName);
+    }
+
+    /// <summary>
+    /// Builds one version's dummy first episode path, for the multi-version TV stub layout (one
+    /// series folder, one dummy episode file per quality version inside it - the TV counterpart of
+    /// <see cref="StubFileNaming.BuildVersionFileName"/>, docs/decisions.md "M5a spike finding").
+    /// </summary>
+    /// <param name="title">Display title.</param>
+    /// <param name="tmdbId">The TMDb id.</param>
+    /// <param name="label">The version's already-sanitised, already-disambiguated label.</param>
+    /// <returns>A relative path of the form <c>Season 01/{title} S01E01 [tmdbid-X] - {label}.strm</c>.</returns>
+    public static string BuildVersionedEpisodeRelativePath(string title, int tmdbId, string label)
+    {
+        var fileName = string.Format(CultureInfo.InvariantCulture, "{0} [tmdbid-{1}] - {2}.strm", BuildEpisodeNamePrefix(title), tmdbId, label);
+        return Path.Combine(SeasonFolderName, fileName);
+    }
+
+    private static string BuildEpisodeNamePrefix(string title)
+    {
+        var sanitisedTitle = StubFileNaming.SanitiseForFileName(title).Trim();
+        return string.IsNullOrEmpty(sanitisedTitle) ? "S01E01" : sanitisedTitle + " S01E01";
     }
 
     /// <summary>
