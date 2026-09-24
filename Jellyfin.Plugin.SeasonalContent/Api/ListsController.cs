@@ -36,12 +36,9 @@ public class ListsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns every saved list. <see cref="SeasonalListConfig.ApiKey"/> is never returned, even
-    /// masked, under that field name: it comes back as <c>ApiKeySet</c>/<c>ApiKeyPreview</c>
-    /// instead, so that spreading this response straight into a <see cref="SaveLists"/> body (a
-    /// naive fetch-edit-resave round trip) omits the key entirely rather than feeding a masked
-    /// placeholder back in as if it were real (docs/decisions.md security note, and a real bug
-    /// this shape previously had - see docs/progress-log.md).
+    /// Returns every saved list. No secret on this DTO anymore - the MDBList API key is now global
+    /// (<see cref="PluginConfiguration.MdbListApiKey"/>, round-tripped via the standard plugin
+    /// configuration endpoint like <c>JellyseerrApiKey</c> already was), not per-list.
     /// </summary>
     /// <returns>The saved lists.</returns>
     [HttpGet("Lists")]
@@ -54,8 +51,6 @@ public class ListsController : ControllerBase
             l.DisplayName,
             l.Username,
             l.Slug,
-            ApiKeySet = !string.IsNullOrEmpty(l.ApiKey),
-            ApiKeyPreview = Mask(l.ApiKey),
             l.Limit,
             l.CollectionId
         });
@@ -125,17 +120,5 @@ public class ListsController : ControllerBase
     {
         var result = await _librarySetupService.SetupAsync(cancellationToken).ConfigureAwait(false);
         return Ok(result);
-    }
-
-    private static string Mask(string apiKey)
-    {
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            return string.Empty;
-        }
-
-        return apiKey.Length <= 4
-            ? new string('*', apiKey.Length)
-            : string.Concat(new string('*', apiKey.Length - 4), apiKey.AsSpan(apiKey.Length - 4));
     }
 }

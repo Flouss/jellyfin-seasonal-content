@@ -18,6 +18,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public string StubBaseUrl { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the MDBList API key, shared by every configured list. Never logged; round-trips
+    /// through the standard plugin-configuration GET/POST like <see cref="JellyseerrApiKey"/> (the
+    /// config page leaves the field blank to mean "keep the saved key" - see
+    /// docs/rename-tv-globalkey-plan.md). Replaces the old per-list <see cref="SeasonalListConfig.ApiKey"/>
+    /// field; <see cref="Configuration.ConfigMigration.MigrateMdbListApiKey"/> copies an old
+    /// per-list key into this field once, on first load after upgrade.
+    /// </summary>
+    public string MdbListApiKey { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the configured seasonal lists. Persisted here as a bare-bones stand-in for the
     /// full config-UI (list add/remove, paste-a-URL parsing) that ships in M6 - see
     /// docs/m4-plan.md.

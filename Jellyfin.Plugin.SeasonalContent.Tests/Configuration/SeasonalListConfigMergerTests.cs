@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.SeasonalContent.Tests.Configuration;
 public class SeasonalListConfigMergerTests
 {
     private static SeasonalListInput ValidInput(Guid? id = null, string displayName = "Halloween") =>
-        new(id, true, displayName, "hdlists", "the-top-100-halloween-movies-of-all-time", "real-api-key", 100);
+        new(id, true, displayName, "hdlists", "the-top-100-halloween-movies-of-all-time", 100);
 
     [Fact]
     public void EmptyExistingAndEmptyIncomingProducesAnEmptyResultWithNoErrors()
@@ -65,13 +65,12 @@ public class SeasonalListConfigMergerTests
     }
 
     [Theory]
-    [InlineData("", "hdlists", "slug", "key")]
-    [InlineData("Name", "", "slug", "key")]
-    [InlineData("Name", "hdlists", "", "key")]
-    [InlineData("Name", "hdlists", "slug", "")]
-    public void MissingARequiredFieldProducesAnErrorAndSavesNothing(string displayName, string username, string slug, string apiKey)
+    [InlineData("", "hdlists", "slug")]
+    [InlineData("Name", "", "slug")]
+    [InlineData("Name", "hdlists", "")]
+    public void MissingARequiredFieldProducesAnErrorAndSavesNothing(string displayName, string username, string slug)
     {
-        var input = new SeasonalListInput(null, true, displayName, username, slug, apiKey, 100);
+        var input = new SeasonalListInput(null, true, displayName, username, slug, 100);
 
         var result = SeasonalListConfigMerger.Merge([], [input]);
 
@@ -126,47 +125,5 @@ public class SeasonalListConfigMergerTests
 
         Assert.Empty(result.Errors);
         Assert.Single(result.Lists);
-    }
-
-    [Fact]
-    public void OmittedApiKeyOnAnEditKeepsTheExistingKey()
-    {
-        // The scenario the masking exists to prevent from backfiring: GET returns no "ApiKey"
-        // field at all (docs/m4-plan.md security note), so a naive fetch-edit-resave round trip
-        // omits it here too - this must inherit the real stored key, not fail validation.
-        var existingId = Guid.NewGuid();
-        var existing = new[] { new SeasonalListConfig { Id = existingId, ApiKey = "the-real-key" } };
-        var input = ValidInput(existingId) with { ApiKey = null };
-
-        var result = SeasonalListConfigMerger.Merge(existing, [input]);
-
-        Assert.Empty(result.Errors);
-        var saved = Assert.Single(result.Lists);
-        Assert.Equal("the-real-key", saved.ApiKey);
-    }
-
-    [Fact]
-    public void ProvidedApiKeyOnAnEditOverwritesTheExistingKey()
-    {
-        var existingId = Guid.NewGuid();
-        var existing = new[] { new SeasonalListConfig { Id = existingId, ApiKey = "old-key" } };
-        var input = ValidInput(existingId) with { ApiKey = "new-key" };
-
-        var result = SeasonalListConfigMerger.Merge(existing, [input]);
-
-        var saved = Assert.Single(result.Lists);
-        Assert.Equal("new-key", saved.ApiKey);
-    }
-
-    [Fact]
-    public void OmittedApiKeyOnABrandNewEntryProducesAnError()
-    {
-        // No existing entry to inherit from, so an omitted key is invalid, not "keep nothing".
-        var input = ValidInput() with { ApiKey = null };
-
-        var result = SeasonalListConfigMerger.Merge([], [input]);
-
-        Assert.NotEmpty(result.Errors);
-        Assert.Empty(result.Lists);
     }
 }

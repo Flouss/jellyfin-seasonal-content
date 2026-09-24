@@ -15,10 +15,5 @@ namespace Jellyfin.Plugin.SeasonalContent.Configuration;
 /// <param name="DisplayName">Required. Becomes the BoxSet's name.</param>
 /// <param name="Username">Required. The MDBList list owner's username.</param>
 /// <param name="Slug">Required. The MDBList list slug.</param>
-/// <param name="ApiKey">The MDBList API key. Never logged. Null or empty means "keep the current
-/// key" when editing an existing entry (matched by <paramref name="Id"/>) - required otherwise, so
-/// that <c>GET SeasonalContent/Lists</c>'s masked preview can never be fed back in as a real key by
-/// a naive fetch-edit-resave round trip (it isn't returned under this field name at all - see
-/// <c>Api/ListsController.GetLists</c>).</param>
 /// <param name="Limit">Requested page size; clamped to 1-500 on save.</param>
-public sealed record SeasonalListInput(Guid? Id, bool Enabled, string DisplayName, string Username, string Slug, string? ApiKey, int Limit);
+public sealed record SeasonalListInput(Guid? Id, bool Enabled, string DisplayName, string Username, string Slug, int Limit);
