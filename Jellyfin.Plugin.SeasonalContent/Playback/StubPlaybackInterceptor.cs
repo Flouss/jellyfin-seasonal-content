@@ -106,7 +106,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
             return;
         }
 
-        var stubRootPath = Path.Combine(Plugin.Instance!.DataFolderPath, "movies_seasonal");
+        var stubRootPath = StubPath.GetRootPath();
         if (!StubPath.IsUnderRoot(item.Path, stubRootPath))
         {
             return;
@@ -196,7 +196,7 @@ public sealed class StubPlaybackInterceptor : IHostedService
             return;
         }
 
-        var stubRootPath = Path.Combine(Plugin.Instance!.DataFolderPath, "movies_seasonal");
+        var stubRootPath = StubPath.GetRootPath();
         if (!StubPath.IsUnderRoot(item.Path, stubRootPath))
         {
             return;

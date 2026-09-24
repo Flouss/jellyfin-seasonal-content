@@ -96,7 +96,7 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
         }
 
         var expectedContent = dummyUrl.ToString();
-        var stubRootPath = Path.Combine(Plugin.Instance!.DataFolderPath, "movies_seasonal");
+        var stubRootPath = StubPath.GetRootPath();
         var enabledLists = config.Lists.Where(l => l.Enabled).ToList();
 
         // 1. Fetch + partition every enabled list. A failure here is isolated per list: it's

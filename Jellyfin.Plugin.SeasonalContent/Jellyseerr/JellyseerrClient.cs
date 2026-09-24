@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -187,6 +189,68 @@ public sealed class JellyseerrClient : IJellyseerrClient
         }
     }
 
+    /// <inheritdoc />
+    public async Task<JellyseerrRadarrLookupResult> GetRadarrServersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = CreateClient(out var baseUrl);
+            if (client is null)
+            {
+                return new JellyseerrRadarrLookupResult(false, null, null, "Jellyseerr is not configured.");
+            }
+
+            using var response = await client.GetAsync(BuildUrl(baseUrl, "service/radarr"), cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new JellyseerrRadarrLookupResult(false, null, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<List<RadarrServerJson>>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var servers = (dto ?? []).Select(s => new JellyseerrRadarrServer(s.Id, s.Name, s.IsDefault)).ToList();
+            return new JellyseerrRadarrLookupResult(true, servers, null, null);
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JellyseerrRadarrLookupResult(false, null, null, ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return new JellyseerrRadarrLookupResult(false, null, null, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<JellyseerrRadarrLookupResult> GetRadarrProfilesAsync(int radarrServerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = CreateClient(out var baseUrl);
+            if (client is null)
+            {
+                return new JellyseerrRadarrLookupResult(false, null, null, "Jellyseerr is not configured.");
+            }
+
+            using var response = await client.GetAsync(BuildUrl(baseUrl, "service/radarr/" + radarrServerId.ToString(CultureInfo.InvariantCulture)), cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new JellyseerrRadarrLookupResult(false, null, null, string.Format(CultureInfo.InvariantCulture, "HTTP {0}.", (int)response.StatusCode));
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<RadarrServerDetailJson>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var profiles = (dto?.Profiles ?? []).Select(p => new JellyseerrRadarrProfile(p.Id, p.Name)).ToList();
+            return new JellyseerrRadarrLookupResult(true, null, profiles, null);
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JellyseerrRadarrLookupResult(false, null, null, ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return new JellyseerrRadarrLookupResult(false, null, null, ex.Message);
+        }
+    }
+
     /// <summary>
     /// Builds the HTTP client, or null if Jellyseerr isn't configured. The API key is set as a
     /// default request header here and nowhere logged (docs/implementation-plan.md §3.1's secrets
@@ -224,4 +288,15 @@ public sealed class JellyseerrClient : IJellyseerrClient
         [property: JsonPropertyName("mediaId")] int MediaId,
         [property: JsonPropertyName("serverId")] int? ServerId,
         [property: JsonPropertyName("profileId")] int? ProfileId);
+
+    private sealed record RadarrServerJson(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("isDefault")] bool IsDefault);
+
+    private sealed record RadarrProfileJson(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("name")] string Name);
+
+    private sealed record RadarrServerDetailJson([property: JsonPropertyName("profiles")] List<RadarrProfileJson>? Profiles);
 }

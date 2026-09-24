@@ -30,77 +30,417 @@
                             </button>
                         </div>
                         <div id="testStubUrlResult" class="fieldDescription" hidden></div>
+
+                        <div class="inputContainer" style="margin-top:1.5em;">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyseerrUrl">Jellyseerr URL</label>
+                            <input id="JellyseerrUrl" name="JellyseerrUrl" type="text" is="emby-input" placeholder="http://192.168.1.10:5055" />
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyseerrApiKey">Jellyseerr API key</label>
+                            <input id="JellyseerrApiKey" name="JellyseerrApiKey" type="password" is="emby-input" autocomplete="new-password" />
+                            <div class="fieldDescription">Leave blank to keep the currently saved key.</div>
+                        </div>
+                        <div>
+                            <button id="btnTestJellyseerr" is="emby-button" type="button" class="raised button-submit block emby-button">
+                                <span>Test connection</span>
+                            </button>
+                        </div>
+                        <div id="testJellyseerrResult" class="fieldDescription" hidden></div>
                     </div>
+
+                    <div class="verticalSection">
+                        <h2>Stub library</h2>
+                        <div class="fieldDescription">
+                            Add this exact path once, on this server, as a <strong>Movies</strong>-type library
+                            (Dashboard &rarr; Libraries &rarr; Add Media Library), with the TMDb metadata fetcher
+                            enabled. Every restricted user also needs explicit access granted to it, or their
+                            collections will silently show missing stubs.
+                        </div>
+                        <div class="inputContainer">
+                            <input id="StubRootPathDisplay" type="text" is="emby-input" readonly />
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h2>Lists</h2>
+                        <div id="listsContainer"></div>
+                        <div>
+                            <button id="btnAddList" is="emby-button" type="button" class="raised block emby-button">
+                                <span>+ Add list</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h2>Requests</h2>
+                        <div class="selectContainer">
+                            <select id="JellyseerrRadarrServerId" is="emby-select" label="Radarr server (Jellyseerr default if unset)">
+                                <option value="">Use Jellyseerr's default</option>
+                            </select>
+                        </div>
+                        <div class="selectContainer">
+                            <select id="JellyseerrRadarrProfileId" is="emby-select" label="Quality profile (Radarr default if unset)">
+                                <option value="">Use the server's default</option>
+                            </select>
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="PlaybackStopDelaySeconds">Playback stop delay (seconds)</label>
+                            <input id="PlaybackStopDelaySeconds" name="PlaybackStopDelaySeconds" type="number" is="emby-input" min="0" max="30" />
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h2>Sync</h2>
+                        <label class="emby-checkbox-label">
+                            <input id="RemoveCollectionWhenListDisabled" type="checkbox" is="emby-checkbox" />
+                            <span>Remove a list's collection when it's disabled or deleted</span>
+                        </label>
+                    </div>
+
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                             <span>Save</span>
                         </button>
                     </div>
+                    <div id="saveResult" class="fieldDescription" hidden></div>
                 </form>
             </div>
         </div>
         <script type="text/javascript">
-            var SeasonalContentConfig = {
-                pluginUniqueId: '3ca6023b-866a-4acb-a1e9-d30c07b4f3aa'
-            };
+            (function () {
+                var SeasonalContentConfig = {
+                    pluginUniqueId: '3ca6023b-866a-4acb-a1e9-d30c07b4f3aa'
+                };
 
-            function updateStubUrlWarning() {
-                var empty = document.querySelector('#StubBaseUrl').value.trim() === '';
-                document.querySelector('#stubUrlWarning').hidden = !empty;
-            }
+                var savedLists = [];      // last-loaded list rows, from GET SeasonalContent/Lists (ApiKey masked)
+                var radarrServers = [];   // last-loaded Radarr servers
+                var listRowSeq = 0;
 
-            document.querySelector('#SeasonalContentConfigPage')
-                .addEventListener('pageshow', function () {
+                function updateStubUrlWarning() {
+                    var empty = document.querySelector('#StubBaseUrl').value.trim() === '';
+                    document.querySelector('#stubUrlWarning').hidden = !empty;
+                }
+
+                function showResult(el, ok, text) {
+                    el.hidden = false;
+                    el.style.color = ok ? '#00a651' : '#cc3333';
+                    el.textContent = text;
+                }
+
+                // ---- Lists section ----
+
+                function parseMdbListUrl(value) {
+                    // Accepts a full https://mdblist.com/lists/<user>/<slug> URL and returns
+                    // {username, slug}, or null if it doesn't look like one.
+                    var match = /mdblist\.com\/lists\/([^/]+)\/([^/?#]+)/i.exec(value.trim());
+                    return match ? { username: match[1], slug: match[2] } : null;
+                }
+
+                function renderListRow(list) {
+                    var rowId = 'listRow' + (listRowSeq++);
+                    var wrap = document.createElement('div');
+                    wrap.className = 'paperList';
+                    wrap.style.cssText = 'border:1px solid rgba(255,255,255,0.15);border-radius:0.3em;padding:1em;margin-bottom:1em;';
+                    wrap.dataset.id = list.Id || '';
+
+                    var apiKeyHint = list.ApiKeySet
+                        ? 'A key is saved (' + (list.ApiKeyPreview || '****') + '). Leave blank to keep it.'
+                        : 'Required.';
+
+                    wrap.innerHTML =
+                        '<label class="emby-checkbox-label">' +
+                        '  <input class="list-enabled" type="checkbox" is="emby-checkbox"' + (list.Enabled !== false ? ' checked' : '') + ' />' +
+                        '  <span>Enabled</span>' +
+                        '</label>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">Paste an mdblist.com list URL (optional)</label>' +
+                        '  <input class="list-paste-url" type="text" is="emby-input" placeholder="https://mdblist.com/lists/hdlists/the-top-100-halloween-movies-of-all-time" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">Display name</label>' +
+                        '  <input class="list-displayname" type="text" is="emby-input" value="' + escapeHtml(list.DisplayName || '') + '" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">MDBList username</label>' +
+                        '  <input class="list-username" type="text" is="emby-input" value="' + escapeHtml(list.Username || '') + '" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">MDBList slug</label>' +
+                        '  <input class="list-slug" type="text" is="emby-input" value="' + escapeHtml(list.Slug || '') + '" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">MDBList API key</label>' +
+                        '  <input class="list-apikey" type="password" is="emby-input" autocomplete="new-password" />' +
+                        '  <div class="fieldDescription">' + apiKeyHint + '</div>' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                        '  <label class="inputLabel inputLabelUnfocused">Limit (1-500)</label>' +
+                        '  <input class="list-limit" type="number" is="emby-input" min="1" max="500" value="' + (list.Limit || 100) + '" />' +
+                        '</div>' +
+                        '<button type="button" class="list-remove raised button-delete block emby-button"><span>Remove list</span></button>';
+
+                    wrap.querySelector('.list-paste-url').addEventListener('change', function (e) {
+                        var parsed = parseMdbListUrl(e.target.value);
+                        if (parsed) {
+                            wrap.querySelector('.list-username').value = parsed.username;
+                            wrap.querySelector('.list-slug').value = parsed.slug;
+                            e.target.value = '';
+                        }
+                    });
+
+                    wrap.querySelector('.list-remove').addEventListener('click', function () {
+                        wrap.remove();
+                    });
+
+                    document.querySelector('#listsContainer').appendChild(wrap);
+                }
+
+                function escapeHtml(s) {
+                    var div = document.createElement('div');
+                    div.textContent = s;
+                    return div.innerHTML;
+                }
+
+                function renderLists(lists) {
+                    document.querySelector('#listsContainer').innerHTML = '';
+                    lists.forEach(renderListRow);
+                }
+
+                function collectListInputs() {
+                    return Array.prototype.map.call(document.querySelectorAll('#listsContainer > div'), function (wrap) {
+                        var apiKeyTyped = wrap.querySelector('.list-apikey').value;
+                        return {
+                            id: wrap.dataset.id || null,
+                            enabled: wrap.querySelector('.list-enabled').checked,
+                            displayName: wrap.querySelector('.list-displayname').value.trim(),
+                            username: wrap.querySelector('.list-username').value.trim(),
+                            slug: wrap.querySelector('.list-slug').value.trim(),
+                            apiKey: apiKeyTyped ? apiKeyTyped : null,
+                            limit: parseInt(wrap.querySelector('.list-limit').value, 10) || 100
+                        };
+                    });
+                }
+
+                function loadLists() {
+                    var url = ApiClient.getUrl('SeasonalContent/Lists');
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (lists) {
+                        savedLists = lists;
+                        renderLists(lists);
+                    });
+                }
+
+                function saveLists() {
+                    var url = ApiClient.getUrl('SeasonalContent/Lists');
+                    var body = collectListInputs();
+                    return ApiClient.ajax({
+                        type: 'POST', url: url, data: JSON.stringify(body),
+                        contentType: 'application/json', dataType: 'json'
+                    }).then(function (lists) {
+                        savedLists = lists;
+                        renderLists(lists);
+                    });
+                }
+
+                document.querySelector('#btnAddList').addEventListener('click', function () {
+                    renderListRow({ Enabled: true, Limit: 100 });
+                });
+
+                // ---- Jellyseerr / Radarr dropdowns ----
+
+                function populateServerDropdown(servers, selectedId) {
+                    var select = document.querySelector('#JellyseerrRadarrServerId');
+                    select.innerHTML = '<option value="">Use Jellyseerr\'s default</option>';
+                    servers.forEach(function (s) {
+                        var opt = document.createElement('option');
+                        opt.value = s.Id;
+                        opt.textContent = s.Name + (s.IsDefault ? ' (Jellyseerr default)' : '');
+                        select.appendChild(opt);
+                    });
+                    if (selectedId !== null && selectedId !== undefined) {
+                        select.value = String(selectedId);
+                    }
+                }
+
+                function populateProfileDropdown(profiles, selectedId) {
+                    var select = document.querySelector('#JellyseerrRadarrProfileId');
+                    select.innerHTML = '<option value="">Use the server\'s default</option>';
+                    profiles.forEach(function (p) {
+                        var opt = document.createElement('option');
+                        opt.value = p.Id;
+                        opt.textContent = p.Name;
+                        select.appendChild(opt);
+                    });
+                    if (selectedId !== null && selectedId !== undefined) {
+                        select.value = String(selectedId);
+                    }
+                }
+
+                function loadRadarrServers(preselectServerId, preselectProfileId) {
+                    var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/RadarrServers');
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (servers) {
+                        radarrServers = servers;
+                        populateServerDropdown(servers, preselectServerId);
+                        if (preselectServerId !== null && preselectServerId !== undefined && preselectServerId !== '') {
+                            return loadRadarrProfiles(preselectServerId, preselectProfileId);
+                        }
+                    }).catch(function () {
+                        // Jellyseerr not configured/reachable yet - leave the dropdowns at their defaults.
+                    });
+                }
+
+                function loadRadarrProfiles(serverId, preselectProfileId) {
+                    if (serverId === '' || serverId === null || serverId === undefined) {
+                        populateProfileDropdown([], null);
+                        return Promise.resolve();
+                    }
+                    var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/RadarrServers/' + encodeURIComponent(serverId) + '/Profiles');
+                    return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(function (profiles) {
+                        populateProfileDropdown(profiles, preselectProfileId);
+                    }).catch(function () {
+                        populateProfileDropdown([], null);
+                    });
+                }
+
+                document.querySelector('#JellyseerrRadarrServerId').addEventListener('change', function (e) {
+                    loadRadarrProfiles(e.target.value, null);
+                });
+
+                document.querySelector('#btnTestJellyseerr').addEventListener('click', function () {
+                    var resultEl = document.querySelector('#testJellyseerrResult');
+                    resultEl.hidden = false;
+                    resultEl.textContent = 'Testing…';
                     Dashboard.showLoadingMsg();
+
+                    // Save the current URL/key first (if a new key was typed) so the test checks
+                    // what's about to be saved, not stale config - mirrors "Test stub URL"'s
+                    // pattern of testing the live configured value.
                     ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
-                        document.querySelector('#StubBaseUrl').value = config.StubBaseUrl || '';
-                        updateStubUrlWarning();
+                        config.JellyseerrUrl = document.querySelector('#JellyseerrUrl').value.trim();
+                        var typedKey = document.querySelector('#JellyseerrApiKey').value;
+                        if (typedKey) {
+                            config.JellyseerrApiKey = typedKey;
+                        }
+                        return ApiClient.updatePluginConfiguration(SeasonalContentConfig.pluginUniqueId, config);
+                    }).then(function () {
+                        var url = ApiClient.getUrl('SeasonalContent/Jellyseerr/TestConnection');
+                        return ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' });
+                    }).then(function (res) {
+                        showResult(resultEl, true, 'Success: ' + res.Message);
+                        return loadRadarrServers(
+                            document.querySelector('#JellyseerrRadarrServerId').value,
+                            document.querySelector('#JellyseerrRadarrProfileId').value);
+                    }).catch(function (err) {
+                        var msg = (err && err.responseJSON && err.responseJSON.Message) || String(err);
+                        showResult(resultEl, false, 'Failed: ' + msg);
+                    }).then(function () {
                         Dashboard.hideLoadingMsg();
                     });
                 });
 
-            document.querySelector('#StubBaseUrl').addEventListener('input', updateStubUrlWarning);
+                // ---- Page load ----
 
-            document.querySelector('#SeasonalContentConfigForm')
-                .addEventListener('submit', function (e) {
-                    Dashboard.showLoadingMsg();
-                    ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
-                        config.StubBaseUrl = document.querySelector('#StubBaseUrl').value.trim();
-                        ApiClient.updatePluginConfiguration(SeasonalContentConfig.pluginUniqueId, config).then(function (result) {
-                            Dashboard.processPluginConfigurationUpdateResult(result);
+                document.querySelector('#SeasonalContentConfigPage')
+                    .addEventListener('pageshow', function () {
+                        Dashboard.showLoadingMsg();
+
+                        var configPromise = ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
+                            document.querySelector('#StubBaseUrl').value = config.StubBaseUrl || '';
                             updateStubUrlWarning();
+
+                            document.querySelector('#JellyseerrUrl').value = config.JellyseerrUrl || '';
+                            document.querySelector('#JellyseerrApiKey').placeholder = config.JellyseerrApiKey ? 'Leave blank to keep the saved key' : '';
+
+                            document.querySelector('#PlaybackStopDelaySeconds').value = config.PlaybackStopDelaySeconds || 2;
+                            document.querySelector('#RemoveCollectionWhenListDisabled').checked = config.RemoveCollectionWhenListDisabled !== false;
+
+                            return loadRadarrServers(config.JellyseerrRadarrServerId, config.JellyseerrRadarrProfileId);
+                        });
+
+                        var listsPromise = loadLists();
+
+                        var stubRootPromise = ApiClient.ajax({
+                            type: 'GET', url: ApiClient.getUrl('SeasonalContent/StubRootPath'), dataType: 'json'
+                        }).then(function (res) {
+                            document.querySelector('#StubRootPathDisplay').value = res.path;
+                        });
+
+                        Promise.all([configPromise, listsPromise, stubRootPromise]).then(function () {
+                            Dashboard.hideLoadingMsg();
+                        }).catch(function () {
+                            Dashboard.hideLoadingMsg();
                         });
                     });
 
-                    e.preventDefault();
-                    return false;
+                document.querySelector('#StubBaseUrl').addEventListener('input', updateStubUrlWarning);
+
+                document.querySelector('#btnTestStubUrl').addEventListener('click', function () {
+                    var resultEl = document.querySelector('#testStubUrlResult');
+                    resultEl.hidden = false;
+                    resultEl.style.color = '';
+                    resultEl.textContent = 'Testing…';
+                    Dashboard.showLoadingMsg();
+
+                    var url = ApiClient.getUrl('SeasonalContent/TestStubUrl');
+                    ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' })
+                        .then(function (res) {
+                            if (res.success) {
+                                resultEl.style.color = '#00a651';
+                                resultEl.textContent = 'Success: server reached ' + res.url + ' (HTTP ' + res.statusCode + ').';
+                            } else {
+                                resultEl.style.color = '#cc3333';
+                                resultEl.textContent = 'Failed: ' + (res.message || ('HTTP ' + res.statusCode)) + ' (' + res.url + ').';
+                            }
+                            Dashboard.hideLoadingMsg();
+                        })
+                        .catch(function (err) {
+                            resultEl.style.color = '#cc3333';
+                            resultEl.textContent = 'Request failed: ' + err;
+                            Dashboard.hideLoadingMsg();
+                        });
                 });
 
-            document.querySelector('#btnTestStubUrl').addEventListener('click', function () {
-                var resultEl = document.querySelector('#testStubUrlResult');
-                resultEl.hidden = false;
-                resultEl.style.color = '';
-                resultEl.textContent = 'Testing…';
-                Dashboard.showLoadingMsg();
+                document.querySelector('#SeasonalContentConfigForm')
+                    .addEventListener('submit', function (e) {
+                        e.preventDefault();
 
-                var url = ApiClient.getUrl('SeasonalContent/TestStubUrl');
-                ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' })
-                    .then(function (res) {
-                        if (res.success) {
-                            resultEl.style.color = '#00a651';
-                            resultEl.textContent = 'Success: server reached ' + res.url + ' (HTTP ' + res.statusCode + ').';
-                        } else {
-                            resultEl.style.color = '#cc3333';
-                            resultEl.textContent = 'Failed: ' + (res.message || ('HTTP ' + res.statusCode)) + ' (' + res.url + ').';
-                        }
-                        Dashboard.hideLoadingMsg();
-                    })
-                    .catch(function (err) {
-                        resultEl.style.color = '#cc3333';
-                        resultEl.textContent = 'Request failed: ' + err;
-                        Dashboard.hideLoadingMsg();
+                        var saveResultEl = document.querySelector('#saveResult');
+                        saveResultEl.hidden = true;
+                        Dashboard.showLoadingMsg();
+
+                        ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
+                            config.StubBaseUrl = document.querySelector('#StubBaseUrl').value.trim();
+                            config.JellyseerrUrl = document.querySelector('#JellyseerrUrl').value.trim();
+
+                            var typedJellyseerrKey = document.querySelector('#JellyseerrApiKey').value;
+                            if (typedJellyseerrKey) {
+                                config.JellyseerrApiKey = typedJellyseerrKey;
+                            }
+
+                            var serverVal = document.querySelector('#JellyseerrRadarrServerId').value;
+                            config.JellyseerrRadarrServerId = serverVal === '' ? null : parseInt(serverVal, 10);
+                            var profileVal = document.querySelector('#JellyseerrRadarrProfileId').value;
+                            config.JellyseerrRadarrProfileId = profileVal === '' ? null : parseInt(profileVal, 10);
+
+                            config.PlaybackStopDelaySeconds = parseInt(document.querySelector('#PlaybackStopDelaySeconds').value, 10) || 0;
+                            config.RemoveCollectionWhenListDisabled = document.querySelector('#RemoveCollectionWhenListDisabled').checked;
+
+                            return ApiClient.updatePluginConfiguration(SeasonalContentConfig.pluginUniqueId, config);
+                        }).then(function (result) {
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                            updateStubUrlWarning();
+                            return saveLists();
+                        }).then(function () {
+                            showResult(saveResultEl, true, 'Saved.');
+                        }).catch(function (err) {
+                            var msg = (err && err.responseJSON && err.responseJSON.errors && err.responseJSON.errors.join('; ')) || String(err);
+                            showResult(saveResultEl, false, 'Save failed: ' + msg);
+                        }).then(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+
+                        return false;
                     });
-            });
+            })();
         </script>
     </div>
 </body>

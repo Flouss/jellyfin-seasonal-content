@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SeasonalContent.Collections;
 using Jellyfin.Plugin.SeasonalContent.Configuration;
+using Jellyfin.Plugin.SeasonalContent.Ownership;
 using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +13,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.SeasonalContent.Api;
 
 /// <summary>
-/// Admin-only, bare-bones JSON list configuration endpoint (docs/m4-plan.md). Stands in for the
-/// full M6 config UI (list add/remove, paste-a-URL parsing) - it exists only so the scheduled
-/// task has saved config to read.
+/// Admin-only list configuration endpoint backing the M6 config page's Lists section (list
+/// add/remove, paste-a-URL parsing happen client-side; this is the save/load API).
 /// </summary>
 [Route("SeasonalContent")]
 [Authorize(Policy = Policies.RequiresElevation)]
@@ -97,6 +97,17 @@ public class ListsController : ControllerBase
         Plugin.Instance!.SaveConfiguration();
 
         return GetLists();
+    }
+
+    /// <summary>
+    /// Returns the stub root's full path, for the config page's "add this as a Movies library"
+    /// hint (docs/implementation-plan.md §3.2).
+    /// </summary>
+    /// <returns>The stub root's full path.</returns>
+    [HttpGet("StubRootPath")]
+    public ActionResult GetStubRootPath()
+    {
+        return Ok(new { path = StubPath.GetRootPath() });
     }
 
     private static string Mask(string apiKey)

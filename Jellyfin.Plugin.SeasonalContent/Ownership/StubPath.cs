@@ -12,6 +12,16 @@ namespace Jellyfin.Plugin.SeasonalContent.Ownership;
 /// </summary>
 public static class StubPath
 {
+    private const string RootFolderName = "movies_seasonal";
+
+    /// <summary>
+    /// Computes the configured stub root's full path: <c>Plugin.DataFolderPath/movies_seasonal</c>.
+    /// Single-sourced here rather than recomputed at each call site (the sync task, the playback
+    /// interceptor, and the config page's path hint all need the same value).
+    /// </summary>
+    /// <returns>The stub root's full path.</returns>
+    public static string GetRootPath() => Path.Combine(Plugin.Instance!.DataFolderPath, RootFolderName);
+
     /// <summary>
     /// Determines whether <paramref name="itemPath"/> is the stub root itself or lies inside it,
     /// using a normalized full-segment prefix comparison (not a substring match).

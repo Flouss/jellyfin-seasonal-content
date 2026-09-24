@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -38,6 +39,38 @@ public sealed record JellyseerrUserLookupResult(bool Found, int? JellyseerrUserI
 /// <param name="Status">The created request's own status, when <see cref="Success"/> is <see langword="true"/>.</param>
 /// <param name="ErrorMessage">Set when <see cref="Success"/> is <see langword="false"/>.</param>
 public sealed record JellyseerrCreateRequestResult(bool Success, JellyseerrRequestStatus? Status, string? ErrorMessage);
+
+/// <summary>
+/// One configured Radarr server, for the config page's server dropdown. Deliberately excludes the
+/// server's own Radarr API key - confirmed live (docs/decisions.md) that Jellyseerr's
+/// <c>GET /service/radarr</c> never returns it despite the shared schema listing an
+/// <c>apiKey</c> property.
+/// </summary>
+/// <param name="Id">The Radarr server's Jellyseerr-assigned id.</param>
+/// <param name="Name">The display name.</param>
+/// <param name="IsDefault">Whether this is Jellyseerr's default server.</param>
+public sealed record JellyseerrRadarrServer(int Id, string Name, bool IsDefault);
+
+/// <summary>
+/// One quality profile on a configured Radarr server.
+/// </summary>
+/// <param name="Id">The profile's id.</param>
+/// <param name="Name">The display name.</param>
+public sealed record JellyseerrRadarrProfile(int Id, string Name);
+
+/// <summary>
+/// The result of <see cref="IJellyseerrClient.GetRadarrServersAsync"/> and
+/// <see cref="IJellyseerrClient.GetRadarrProfilesAsync"/>.
+/// </summary>
+/// <param name="Success">Whether the call succeeded.</param>
+/// <param name="Servers">The Radarr servers, when listing servers.</param>
+/// <param name="Profiles">The server's quality profiles, when listing profiles.</param>
+/// <param name="ErrorMessage">Set when <see cref="Success"/> is <see langword="false"/>.</param>
+public sealed record JellyseerrRadarrLookupResult(
+    bool Success,
+    IReadOnlyList<JellyseerrRadarrServer>? Servers,
+    IReadOnlyList<JellyseerrRadarrProfile>? Profiles,
+    string? ErrorMessage);
 
 /// <summary>
 /// Thin client over Jellyseerr's public API (docs/decisions.md "M5 API surface" - shapes verified
@@ -85,4 +118,20 @@ public interface IJellyseerrClient
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The create result.</returns>
     Task<JellyseerrCreateRequestResult> CreateRequestAsync(int tmdbId, int jellyseerrUserId, int? radarrServerId, int? radarrProfileId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists Jellyseerr's configured Radarr servers, for the config page's server dropdown
+    /// (docs/implementation-plan.md §4).
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The lookup result, with <see cref="JellyseerrRadarrLookupResult.Servers"/> set.</returns>
+    Task<JellyseerrRadarrLookupResult> GetRadarrServersAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists a Radarr server's quality profiles, for the config page's profile dropdown.
+    /// </summary>
+    /// <param name="radarrServerId">The Radarr server's Jellyseerr-assigned id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The lookup result, with <see cref="JellyseerrRadarrLookupResult.Profiles"/> set.</returns>
+    Task<JellyseerrRadarrLookupResult> GetRadarrProfilesAsync(int radarrServerId, CancellationToken cancellationToken);
 }
