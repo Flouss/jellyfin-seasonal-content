@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.SeasonalContent.Configuration;
@@ -15,4 +16,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// (docs/implementation-plan.md §3.4).
     /// </summary>
     public string StubBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the configured seasonal lists. Persisted here as a bare-bones stand-in for the
+    /// full config-UI (list add/remove, paste-a-URL parsing) that ships in M6 - see
+    /// docs/m4-plan.md.
+    /// </summary>
+    public List<SeasonalListConfig> Lists { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether disabling or deleting a list also removes its
+    /// BoxSet on the next sync (docs/implementation-plan.md §3.7, §4).
+    /// </summary>
+    public bool RemoveCollectionWhenListDisabled { get; set; } = true;
 }

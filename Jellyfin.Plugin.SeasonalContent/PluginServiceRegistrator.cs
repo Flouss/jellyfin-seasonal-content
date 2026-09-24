@@ -1,8 +1,12 @@
+using Jellyfin.Plugin.SeasonalContent.Collections;
 using Jellyfin.Plugin.SeasonalContent.Lists;
 using Jellyfin.Plugin.SeasonalContent.Lists.MdbList;
 using Jellyfin.Plugin.SeasonalContent.Ownership;
+using Jellyfin.Plugin.SeasonalContent.Stubs;
+using Jellyfin.Plugin.SeasonalContent.Sync;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.SeasonalContent;
@@ -19,5 +23,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IMdbListApiClient, MdbListApiClient>();
         serviceCollection.AddSingleton<IListSource, MdbListSource>();
         serviceCollection.AddScoped<IMovieCatalog, LibraryMovieCatalog>();
+        serviceCollection.AddScoped<IStubFileIoExecutor, StubFileIoExecutor>();
+        serviceCollection.AddScoped<IStubLibraryScanner, StubLibraryScanner>();
+        serviceCollection.AddScoped<ICollectionReconciler, CollectionReconciler>();
+        serviceCollection.AddScoped<IScheduledTask, SeasonalContentSyncTask>();
     }
 }
