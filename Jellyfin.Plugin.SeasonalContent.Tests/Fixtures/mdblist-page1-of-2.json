@@ -1,0 +1,82 @@
+{
+  "movies": [
+    {
+      "id": 32685,
+      "mediatype": "movie",
+      "imdb_id": "tt0101821",
+      "tvdb_id": 13233,
+      "ids": {
+        "mdblist": "5s8",
+        "imdb": "tt0101821",
+        "tmdb": 32685,
+        "tvdb": 13233
+      },
+      "title": "Ernest Scared Stupid",
+      "language": "en",
+      "spoken_language": "en",
+      "country": "us",
+      "release_year": 1991,
+      "adult": 0,
+      "release_date": "1991-10-11",
+      "status": "Released",
+      "runtime": 91,
+      "added_at": null,
+      "rank": null
+    },
+    {
+      "id": 293970,
+      "mediatype": "movie",
+      "imdb_id": "tt2118624",
+      "tvdb_id": 7136,
+      "ids": {
+        "mdblist": "25k",
+        "imdb": "tt2118624",
+        "tmdb": 293970,
+        "tvdb": 7136
+      },
+      "title": "The Final Girls",
+      "language": "en",
+      "spoken_language": "en",
+      "country": "us",
+      "release_year": 2015,
+      "adult": 0,
+      "release_date": "2015-10-09",
+      "status": "Released",
+      "runtime": 91,
+      "added_at": null,
+      "rank": null
+    },
+    {
+      "id": 481084,
+      "mediatype": "movie",
+      "imdb_id": "tt1620981",
+      "tvdb_id": 63187,
+      "ids": {
+        "mdblist": "1gib",
+        "imdb": "tt1620981",
+        "tmdb": 481084,
+        "tvdb": 63187
+      },
+      "title": "The Addams Family",
+      "language": "en",
+      "spoken_language": "en",
+      "country": "us",
+      "release_year": 2019,
+      "adult": 0,
+      "release_date": "2019-10-10",
+      "status": "Released",
+      "runtime": 87,
+      "added_at": null,
+      "rank": null
+    }
+  ],
+  "shows": [],
+  "seasons": [],
+  "episodes": [],
+  "pagination": {
+    "offset": 0,
+    "limit": 3,
+    "total": 5,
+    "has_more": true
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "movies": [
+    {
+      "id": 2662,
+      "mediatype": "movie",
+      "imdb_id": "tt0251736",
+      "tvdb_id": 7596,
+      "ids": {
+        "mdblist": "bzgn",
+        "imdb": "tt0251736",
+        "tmdb": 2662,
+        "tvdb": 7596
+      },
+      "title": "House of 1000 Corpses",
+      "language": "en",
+      "spoken_language": "en",
+      "country": "us",
+      "release_year": 2003,
+      "adult": 0,
+      "release_date": "2003-04-11",
+      "status": "Released",
+      "runtime": 89,
+      "added_at": null,
+      "rank": null
+    },
+    {
+      "id": 10166,
+      "mediatype": "movie",
+      "imdb_id": "tt0100944",
+      "tvdb_id": 2812,
+      "ids": {
+        "mdblist": "2xe",
+        "imdb": "tt0100944",
+        "tmdb": 10166,
+        "tvdb": 2812
+      },
+      "title": "The Witches",
+      "language": "en",
+      "spoken_language": "en",
+      "country": "gb",
+      "release_year": 1990,
+      "adult": 0,
+      "release_date": "1990-05-25",
+      "status": "released",
+      "runtime": 91,
+      "added_at": null,
+      "rank": null
+    }
+  ],
+  "shows": [],
+  "seasons": [],
+  "episodes": [],
+  "pagination": {
+    "offset": 3,
+    "limit": 3,
+    "total": 5,
+    "has_more": false
+  }
+}
