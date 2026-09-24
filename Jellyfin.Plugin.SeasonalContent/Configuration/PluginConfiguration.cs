@@ -29,4 +29,41 @@ public class PluginConfiguration : BasePluginConfiguration
     /// BoxSet on the next sync (docs/implementation-plan.md §3.7, §4).
     /// </summary>
     public bool RemoveCollectionWhenListDisabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the Jellyseerr base URL (e.g. <c>http://host:5055</c>), no trailing slash
+    /// required. Empty by default.
+    /// </summary>
+    public string JellyseerrUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Jellyseerr API key. Never logged (docs/implementation-plan.md §3.1's
+    /// secrets rule applies here too, not just to MDBList's key).
+    /// </summary>
+    public string JellyseerrApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Radarr server id to request against, or null to use Jellyseerr's own
+    /// default.
+    /// </summary>
+    public int? JellyseerrRadarrServerId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Radarr quality profile id to request with, or null to use Jellyseerr's
+    /// own default.
+    /// </summary>
+    public int? JellyseerrRadarrProfileId { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a playing user with no Jellyseerr account should be
+    /// auto-imported (§3.6 policy (i)) rather than told to ask an admin (policy (ii), the default
+    /// - and the only one implemented in M5; this flag is reserved for a future opt-in toggle).
+    /// </summary>
+    public bool AutoImportJellyseerrUsers { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many seconds the interceptor waits before stopping a stub's playback, so
+    /// slower clients have time to actually start rendering before being stopped.
+    /// </summary>
+    public int PlaybackStopDelaySeconds { get; set; } = 2;
 }

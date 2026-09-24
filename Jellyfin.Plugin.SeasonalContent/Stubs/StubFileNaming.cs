@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Jellyfin.Plugin.SeasonalContent.Stubs;
 
@@ -46,6 +47,23 @@ public static class StubFileNaming
 
         var namePrefix = string.Join(' ', pieces);
         return string.Format(CultureInfo.InvariantCulture, "{0} [tmdbid-{1}].strm", namePrefix, tmdbId).TrimStart();
+    }
+
+    private static readonly Regex TmdbIdMarker = new(@"\[tmdbid-(\d+)\]", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Parses the TMDb id back out of a stub file name built by <see cref="BuildFileName"/>, for
+    /// the case where an item's TMDb provider id isn't populated yet (docs/implementation-plan.md
+    /// §3.5 step 2's fallback).
+    /// </summary>
+    /// <param name="fileName">The file name (not a full path).</param>
+    /// <returns>The TMDb id, or <see langword="null"/> if the name has no <c>[tmdbid-X]</c> marker.</returns>
+    public static int? TryParseTmdbId(string fileName)
+    {
+        var match = TmdbIdMarker.Match(fileName);
+        return match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+            ? id
+            : null;
     }
 
     private static string Sanitise(string title)

@@ -64,4 +64,39 @@ public class StubFileNamingTests
 
         Assert.Equal("(2020) [tmdbid-99].strm", name);
     }
+
+    [Fact]
+    public void ParsesTheTmdbIdBackOutOfAWellFormedStubFileName()
+    {
+        var id = StubFileNaming.TryParseTmdbId("Paprika (2006) [tmdbid-4977].strm");
+
+        Assert.Equal(4977, id);
+    }
+
+    [Fact]
+    public void ParsesTheTmdbIdWhenThereIsNoYearBlock()
+    {
+        var id = StubFileNaming.TryParseTmdbId("Untitled Project [tmdbid-12345].strm");
+
+        Assert.Equal(12345, id);
+    }
+
+    [Fact]
+    public void ReturnsNullForARealFileNameWithNoTmdbIdMarker()
+    {
+        // Presence companion: a real library file's name must never be mistaken for a stub's.
+        var id = StubFileNaming.TryParseTmdbId("12 Angry Men (1957).mp4");
+
+        Assert.Null(id);
+    }
+
+    [Fact]
+    public void ReturnsNullWhenTheMarkerTextAppearsOutsideBrackets()
+    {
+        // A title that happens to contain the literal word "tmdbid" must not be mistaken for the
+        // real marker - only the bracketed form counts.
+        var id = StubFileNaming.TryParseTmdbId("My tmdbid-99 Story (2020).strm");
+
+        Assert.Null(id);
+    }
 }
