@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.SeasonalContent.Collections;
 using Jellyfin.Plugin.SeasonalContent.Configuration;
 using Jellyfin.Plugin.SeasonalContent.Ownership;
+using Jellyfin.Plugin.SeasonalContent.Setup;
 using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,14 +22,17 @@ namespace Jellyfin.Plugin.SeasonalContent.Api;
 public class ListsController : ControllerBase
 {
     private readonly ICollectionReconciler _collectionReconciler;
+    private readonly ILibrarySetupService _librarySetupService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ListsController"/> class.
     /// </summary>
     /// <param name="collectionReconciler">Instance of the <see cref="ICollectionReconciler"/> interface.</param>
-    public ListsController(ICollectionReconciler collectionReconciler)
+    /// <param name="librarySetupService">Instance of the <see cref="ILibrarySetupService"/> interface.</param>
+    public ListsController(ICollectionReconciler collectionReconciler, ILibrarySetupService librarySetupService)
     {
         _collectionReconciler = collectionReconciler;
+        _librarySetupService = librarySetupService;
     }
 
     /// <summary>
@@ -108,6 +112,19 @@ public class ListsController : ControllerBase
     public ActionResult GetStubRootPath()
     {
         return Ok(new { path = StubPath.GetRootPath() });
+    }
+
+    /// <summary>
+    /// Creates whichever of the stub library and the Collections library don't already exist,
+    /// for the config page's "Set up libraries" button. Idempotent - safe to click repeatedly.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What was created vs. already present.</returns>
+    [HttpPost("SetupLibraries")]
+    public async Task<ActionResult> SetupLibraries(CancellationToken cancellationToken)
+    {
+        var result = await _librarySetupService.SetupAsync(cancellationToken).ConfigureAwait(false);
+        return Ok(result);
     }
 
     private static string Mask(string apiKey)
