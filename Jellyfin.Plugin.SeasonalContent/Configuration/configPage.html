@@ -8,10 +8,100 @@
     <div id="SeasonalContentConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
         <div data-role="content">
             <div class="content-primary">
-                <h2>Seasonal Content</h2>
-                <p>Configuration is not built yet (M0 scaffold). See docs/implementation-plan.md §4.</p>
+                <form id="SeasonalContentConfigForm">
+                    <div class="verticalSection">
+                        <h2>Connection</h2>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="StubBaseUrl">Stub base URL</label>
+                            <input id="StubBaseUrl" name="StubBaseUrl" type="text" is="emby-input" placeholder="http://192.168.1.10:8096" />
+                            <div class="fieldDescription">
+                                The scheme://host:port that both this server's own transcoder and every
+                                client device on your LAN can reach. Prefer a LAN IP over 127.0.0.1 or a
+                                reverse-proxied hostname. Left empty, stub playback is disabled.
+                            </div>
+                        </div>
+                        <div id="stubUrlWarning" class="fieldDescription" style="color:#cc3333;" hidden>
+                            Stub base URL is empty. Titles the server doesn't own will not be playable
+                            until this is set.
+                        </div>
+                        <div>
+                            <button id="btnTestStubUrl" is="emby-button" type="button" class="raised button-submit block emby-button">
+                                <span>Test stub URL</span>
+                            </button>
+                        </div>
+                        <div id="testStubUrlResult" class="fieldDescription" hidden></div>
+                    </div>
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
+        <script type="text/javascript">
+            var SeasonalContentConfig = {
+                pluginUniqueId: '3ca6023b-866a-4acb-a1e9-d30c07b4f3aa'
+            };
+
+            function updateStubUrlWarning() {
+                var empty = document.querySelector('#StubBaseUrl').value.trim() === '';
+                document.querySelector('#stubUrlWarning').hidden = !empty;
+            }
+
+            document.querySelector('#SeasonalContentConfigPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
+                        document.querySelector('#StubBaseUrl').value = config.StubBaseUrl || '';
+                        updateStubUrlWarning();
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+
+            document.querySelector('#StubBaseUrl').addEventListener('input', updateStubUrlWarning);
+
+            document.querySelector('#SeasonalContentConfigForm')
+                .addEventListener('submit', function (e) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
+                        config.StubBaseUrl = document.querySelector('#StubBaseUrl').value.trim();
+                        ApiClient.updatePluginConfiguration(SeasonalContentConfig.pluginUniqueId, config).then(function (result) {
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                            updateStubUrlWarning();
+                        });
+                    });
+
+                    e.preventDefault();
+                    return false;
+                });
+
+            document.querySelector('#btnTestStubUrl').addEventListener('click', function () {
+                var resultEl = document.querySelector('#testStubUrlResult');
+                resultEl.hidden = false;
+                resultEl.style.color = '';
+                resultEl.textContent = 'Testing…';
+                Dashboard.showLoadingMsg();
+
+                var url = ApiClient.getUrl('SeasonalContent/TestStubUrl');
+                ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' })
+                    .then(function (res) {
+                        if (res.success) {
+                            resultEl.style.color = '#00a651';
+                            resultEl.textContent = 'Success: server reached ' + res.url + ' (HTTP ' + res.statusCode + ').';
+                        } else {
+                            resultEl.style.color = '#cc3333';
+                            resultEl.textContent = 'Failed: ' + (res.message || ('HTTP ' + res.statusCode)) + ' (' + res.url + ').';
+                        }
+                        Dashboard.hideLoadingMsg();
+                    })
+                    .catch(function (err) {
+                        resultEl.style.color = '#cc3333';
+                        resultEl.textContent = 'Request failed: ' + err;
+                        Dashboard.hideLoadingMsg();
+                    });
+            });
+        </script>
     </div>
 </body>
 </html>
