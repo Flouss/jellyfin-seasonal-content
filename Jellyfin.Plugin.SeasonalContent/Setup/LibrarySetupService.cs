@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.SeasonalContent.Setup;
 /// <inheritdoc />
 public sealed class LibrarySetupService : ILibrarySetupService
 {
-    private const string StubLibraryName = "Seasonal Content";
+    private const string StubLibraryName = "Smarter Collections (Movies)";
     private const string CollectionsLibraryName = "Collections";
 
     private readonly ILibraryManager _libraryManager;

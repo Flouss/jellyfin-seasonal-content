@@ -1,9 +1,11 @@
-# Jellyfin Seasonal Content
+# Smarter Collections
 
-A Jellyfin plugin that turns curated [MDBList](https://mdblist.com/) movie lists (for example
-"Top 100 Halloween Movies") into native Jellyfin **Collections**, visible on every client — Web,
-Android TV (Wolphin), and anywhere else Jellyfin runs. Every configured list shows up as its own
-Collection on the **Collections tab**, sitting alongside your other collections.
+A Jellyfin plugin that turns curated [MDBList](https://mdblist.com/) lists (movies and TV shows —
+for example "Top 100 Halloween Movies") into native Jellyfin **Collections**, visible on every
+client — Web, Android TV (Wolphin), and anywhere else Jellyfin runs. Every configured list shows up
+as its own Collection on the **Collections tab**, sitting alongside your other collections.
+
+(The name is a wink at [johnpc/jellyfin-plugin-smart-collections](https://github.com/johnpc/jellyfin-plugin-smart-collections) — see "Credit" below.)
 
 - **Titles the server already owns play normally.** You get the real library item, never a stub
   duplicate — the plugin checks ownership by TMDb id before ever writing a placeholder.
