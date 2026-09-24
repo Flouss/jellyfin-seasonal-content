@@ -87,6 +87,12 @@ understand its behavior, and this plugin's API signatures and shapes were verifi
 against the official Jellyfin plugin template, Jellyfin's own NuGet packages, and the real running
 server, never copied from jellynext's source.
 
+Collection grouping was also informed by evaluating
+[johnpc/jellyfin-plugin-smart-collections](https://github.com/johnpc/jellyfin-plugin-smart-collections)
+as an alternative to building BoxSets directly; its tag-driven rule approach shaped the comparison
+in `docs/implementation-plan.md` §6, though this plugin ultimately creates BoxSets itself via
+`ICollectionManager` rather than depending on it. No code from that plugin is reused.
+
 ## License
 
 GPL-3.0. See `LICENSE`.
