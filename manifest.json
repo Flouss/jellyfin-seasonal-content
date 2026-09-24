@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "3ca6023b-866a-4acb-a1e9-d30c07b4f3aa",
+    "name": "Seasonal Content",
+    "description": "Curated seasonal movie lists (from MDBList) as native Jellyfin Collections, with Jellyseerr requests for titles the server doesn't own.",
+    "overview": "Seasonal movie collections with request support",
+    "owner": "TODO-github-username-or-org",
+    "category": "Metadata",
+    "versions": [
+      {
+        "version": "0.1.0.0",
+        "changelog": "See CHANGELOG.md.",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "TODO-https://github.com/<owner>/jellyfin-seasonal-content/releases/download/v0.1.0.0/seasonal-content_0.1.0.0.zip",
+        "checksum": "TODO-md5-of-the-release-zip",
+        "timestamp": "TODO-ISO-8601-release-timestamp"
+      }
+    ]
+  }
+]

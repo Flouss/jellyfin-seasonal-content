@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release
+
+      - name: Package
+        id: package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP_NAME="seasonal-content_${VERSION}.zip"
+          cd Jellyfin.Plugin.SeasonalContent/bin/Release/net10.0
+          zip "$ZIP_NAME" Jellyfin.Plugin.SeasonalContent.dll
+          mv "$ZIP_NAME" "$GITHUB_WORKSPACE/"
+          cd "$GITHUB_WORKSPACE"
+          CHECKSUM=$(md5sum "$ZIP_NAME" | cut -d ' ' -f 1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.zip_name }}
+          body: |
+            MD5 checksum: `${{ steps.package.outputs.checksum }}`
+
+            Update `manifest.json`'s entry for this version with this checksum and this release
+            asset's download URL before publishing the catalog manifest.
+          generate_release_notes: true
