@@ -183,11 +183,12 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
                     unresolved);
             }
 
-            var collectionId = await _collectionReconciler.ReconcileAsync(listConfig, desiredMemberIds, cancellationToken).ConfigureAwait(false);
-            if (collectionId.HasValue)
-            {
-                listConfig.CollectionId = collectionId;
-            }
+            // Always assign, never only-when-HasValue: null is itself meaningful here (no
+            // currently-valid collection), not "leave whatever was there before" - otherwise a
+            // stale id left over from a BoxSet deleted outside the plugin would never clear while
+            // this list has zero resolvable members, and every future sync would keep re-logging
+            // CollectionReconciler's "no longer resolves" warning for it.
+            listConfig.CollectionId = await _collectionReconciler.ReconcileAsync(listConfig, desiredMemberIds, cancellationToken).ConfigureAwait(false);
         }
 
         // 6. Disabled lists (still present in config) get their collection removed. Deleted lists

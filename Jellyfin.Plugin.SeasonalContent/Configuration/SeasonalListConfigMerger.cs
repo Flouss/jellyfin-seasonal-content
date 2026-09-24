@@ -29,24 +29,39 @@ public static class SeasonalListConfigMerger
     /// <returns>The merge result. The caller must check <see cref="ListsSaveResult.Errors"/> before persisting.</returns>
     public static ListsSaveResult Merge(IReadOnlyList<SeasonalListConfig> existing, IReadOnlyList<SeasonalListInput> incoming)
     {
-        var existingById = existing.ToDictionary(l => l.Id);
+        // GroupBy + First, not ToDictionary: existing must never throw here even if the saved
+        // config already holds corrupted duplicate Ids (e.g. from manual XML editing) - only the
+        // check below is responsible for stopping new duplicates from being created.
+        var existingById = existing.GroupBy(l => l.Id).ToDictionary(g => g.Key, g => g.First());
         var errors = new List<string>();
         var merged = new List<SeasonalListConfig>();
+        var seenIncomingIds = new HashSet<Guid>();
 
         for (var index = 0; index < incoming.Count; index++)
         {
             var input = incoming[index];
 
-            if (string.IsNullOrWhiteSpace(input.DisplayName)
-                || string.IsNullOrWhiteSpace(input.Username)
-                || string.IsNullOrWhiteSpace(input.Slug)
-                || string.IsNullOrWhiteSpace(input.ApiKey))
+            if (input.Id.HasValue && !seenIncomingIds.Add(input.Id.Value))
             {
-                errors.Add($"List at index {index}: DisplayName, Username, Slug and ApiKey are all required.");
+                errors.Add($"List at index {index}: duplicate Id '{input.Id}' - each list must have a unique Id.");
                 continue;
             }
 
             var matched = input.Id.HasValue && existingById.TryGetValue(input.Id.Value, out var found) ? found : null;
+
+            // Null/empty means "keep the current key" on an edit - GET never returns the real key
+            // under this field name (see Api/ListsController.GetLists), so a naive fetch-edit-
+            // resave round trip omits it here rather than feeding a masked placeholder back in.
+            var apiKey = string.IsNullOrWhiteSpace(input.ApiKey) ? matched?.ApiKey : input.ApiKey;
+
+            if (string.IsNullOrWhiteSpace(input.DisplayName)
+                || string.IsNullOrWhiteSpace(input.Username)
+                || string.IsNullOrWhiteSpace(input.Slug)
+                || string.IsNullOrWhiteSpace(apiKey))
+            {
+                errors.Add($"List at index {index}: DisplayName, Username, Slug and ApiKey are all required.");
+                continue;
+            }
 
             merged.Add(new SeasonalListConfig
             {
@@ -55,7 +70,7 @@ public static class SeasonalListConfigMerger
                 DisplayName = input.DisplayName,
                 Username = input.Username,
                 Slug = input.Slug,
-                ApiKey = input.ApiKey,
+                ApiKey = apiKey,
                 Limit = Math.Clamp(input.Limit, 1, 500),
                 CollectionId = matched?.CollectionId
             });

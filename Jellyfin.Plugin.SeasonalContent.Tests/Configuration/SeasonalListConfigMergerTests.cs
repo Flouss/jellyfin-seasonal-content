@@ -92,4 +92,81 @@ public class SeasonalListConfigMergerTests
         var saved = Assert.Single(result.Lists);
         Assert.Equal(expected, saved.Limit);
     }
+
+    [Fact]
+    public void TwoIncomingEntriesSharingTheSameIdProduceAnErrorAndSaveNothing()
+    {
+        // A prior version let this through, which corrupted the saved config: the next save's
+        // existing.ToDictionary(l => l.Id) would throw on the duplicate key, permanently bricking
+        // the endpoint until the XML was hand-edited.
+        var sharedId = Guid.NewGuid();
+        var inputs = new[] { ValidInput(sharedId, "First"), ValidInput(sharedId, "Second") };
+
+        var result = SeasonalListConfigMerger.Merge([], inputs);
+
+        // Errors.Count > 0 means the caller (Api/ListsController) must not persist result.Lists at
+        // all (see ListsSaveResult's own doc comment) - that atomicity is the controller's
+        // contract to honor, not Merge's to redundantly re-enforce by emptying Lists itself.
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public void DuplicateIdsInExistingSavedConfigDoNotCrashTheNextMerge()
+    {
+        // Defensive: even if corrupted duplicate-Id data already exists on disk (e.g. from manual
+        // XML editing, or a save made before the above fix shipped), a further save must not throw.
+        var dupeId = Guid.NewGuid();
+        var existing = new[]
+        {
+            new SeasonalListConfig { Id = dupeId, DisplayName = "A" },
+            new SeasonalListConfig { Id = dupeId, DisplayName = "B" }
+        };
+
+        var result = SeasonalListConfigMerger.Merge(existing, [ValidInput()]);
+
+        Assert.Empty(result.Errors);
+        Assert.Single(result.Lists);
+    }
+
+    [Fact]
+    public void OmittedApiKeyOnAnEditKeepsTheExistingKey()
+    {
+        // The scenario the masking exists to prevent from backfiring: GET returns no "ApiKey"
+        // field at all (docs/m4-plan.md security note), so a naive fetch-edit-resave round trip
+        // omits it here too - this must inherit the real stored key, not fail validation.
+        var existingId = Guid.NewGuid();
+        var existing = new[] { new SeasonalListConfig { Id = existingId, ApiKey = "the-real-key" } };
+        var input = ValidInput(existingId) with { ApiKey = null };
+
+        var result = SeasonalListConfigMerger.Merge(existing, [input]);
+
+        Assert.Empty(result.Errors);
+        var saved = Assert.Single(result.Lists);
+        Assert.Equal("the-real-key", saved.ApiKey);
+    }
+
+    [Fact]
+    public void ProvidedApiKeyOnAnEditOverwritesTheExistingKey()
+    {
+        var existingId = Guid.NewGuid();
+        var existing = new[] { new SeasonalListConfig { Id = existingId, ApiKey = "old-key" } };
+        var input = ValidInput(existingId) with { ApiKey = "new-key" };
+
+        var result = SeasonalListConfigMerger.Merge(existing, [input]);
+
+        var saved = Assert.Single(result.Lists);
+        Assert.Equal("new-key", saved.ApiKey);
+    }
+
+    [Fact]
+    public void OmittedApiKeyOnABrandNewEntryProducesAnError()
+    {
+        // No existing entry to inherit from, so an omitted key is invalid, not "keep nothing".
+        var input = ValidInput() with { ApiKey = null };
+
+        var result = SeasonalListConfigMerger.Merge([], [input]);
+
+        Assert.NotEmpty(result.Errors);
+        Assert.Empty(result.Lists);
+    }
 }

@@ -32,8 +32,12 @@ public class ListsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns every saved list, with <see cref="SeasonalListConfig.ApiKey"/> masked
-    /// (docs/decisions.md security note: never echo a full key back).
+    /// Returns every saved list. <see cref="SeasonalListConfig.ApiKey"/> is never returned, even
+    /// masked, under that field name: it comes back as <c>ApiKeySet</c>/<c>ApiKeyPreview</c>
+    /// instead, so that spreading this response straight into a <see cref="SaveLists"/> body (a
+    /// naive fetch-edit-resave round trip) omits the key entirely rather than feeding a masked
+    /// placeholder back in as if it were real (docs/decisions.md security note, and a real bug
+    /// this shape previously had - see docs/progress-log.md).
     /// </summary>
     /// <returns>The saved lists.</returns>
     [HttpGet("Lists")]
@@ -46,7 +50,8 @@ public class ListsController : ControllerBase
             l.DisplayName,
             l.Username,
             l.Slug,
-            ApiKey = Mask(l.ApiKey),
+            ApiKeySet = !string.IsNullOrEmpty(l.ApiKey),
+            ApiKeyPreview = Mask(l.ApiKey),
             l.Limit,
             l.CollectionId
         });
