@@ -11,3 +11,12 @@ obj/
 ## OS
 .DS_Store
 Thumbs.db
+
+## Kept out of this public repo on purpose (2026-09-24):
+## - docs/ (private dev record: progress log, decisions, plans - real internal
+##   network details throughout) now lives at
+##   https://gitea.wn8.org/wama/jellyfin-seasonal-content-docs (private)
+## - scripts/deploy.sh (hardcoded personal HomeLab host/key/paths) is kept
+##   locally only, never committed here
+docs/
+scripts/deploy.sh
