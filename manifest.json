@@ -11,9 +11,9 @@
         "version": "0.1.0.0",
         "changelog": "See CHANGELOG.md.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "TODO-https://github.com/<owner>/jellyfin-seasonal-content/releases/download/v0.1.0.0/seasonal-content_0.1.0.0.zip",
-        "checksum": "TODO-md5-of-the-release-zip",
-        "timestamp": "TODO-ISO-8601-release-timestamp"
+        "sourceUrl": "https://github.com/Flouss/jellyfin-seasonal-content/releases/download/v0.1.0.0/seasonal-content_0.1.0.0.zip",
+        "checksum": "4a49658e83e8c8453adbba1da23ba333",
+        "timestamp": "2026-09-24T13:35:48Z"
       }
     ]
   }
