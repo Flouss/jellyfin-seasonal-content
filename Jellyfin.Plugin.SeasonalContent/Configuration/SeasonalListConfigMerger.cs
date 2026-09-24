@@ -49,17 +49,11 @@ public static class SeasonalListConfigMerger
 
             var matched = input.Id.HasValue && existingById.TryGetValue(input.Id.Value, out var found) ? found : null;
 
-            // Null/empty means "keep the current key" on an edit - GET never returns the real key
-            // under this field name (see Api/ListsController.GetLists), so a naive fetch-edit-
-            // resave round trip omits it here rather than feeding a masked placeholder back in.
-            var apiKey = string.IsNullOrWhiteSpace(input.ApiKey) ? matched?.ApiKey : input.ApiKey;
-
             if (string.IsNullOrWhiteSpace(input.DisplayName)
                 || string.IsNullOrWhiteSpace(input.Username)
-                || string.IsNullOrWhiteSpace(input.Slug)
-                || string.IsNullOrWhiteSpace(apiKey))
+                || string.IsNullOrWhiteSpace(input.Slug))
             {
-                errors.Add($"List at index {index}: DisplayName, Username, Slug and ApiKey are all required.");
+                errors.Add($"List at index {index}: DisplayName, Username and Slug are all required.");
                 continue;
             }
 
@@ -70,7 +64,6 @@ public static class SeasonalListConfigMerger
                 DisplayName = input.DisplayName,
                 Username = input.Username,
                 Slug = input.Slug,
-                ApiKey = apiKey,
                 Limit = Math.Clamp(input.Limit, 1, 500),
                 CollectionId = matched?.CollectionId
             });

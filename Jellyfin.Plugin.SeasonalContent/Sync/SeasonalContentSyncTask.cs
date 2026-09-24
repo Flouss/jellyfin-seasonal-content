@@ -55,13 +55,13 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
     }
 
     /// <inheritdoc />
-    public string Name => "Sync seasonal lists";
+    public string Name => "Sync Smarter Collections lists";
 
     /// <inheritdoc />
     public string Key => "SeasonalContentSync";
 
     /// <inheritdoc />
-    public string Description => "Fetches every enabled seasonal list, reconciles stub files, scans the stub library, and reconciles each list's collection.";
+    public string Description => "Fetches every enabled Smarter Collections list, reconciles stub files, scans the stub libraries, and reconciles each list's collection.";
 
     /// <inheritdoc />
     public string Category => "Library";
@@ -81,6 +81,12 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
         if (string.IsNullOrWhiteSpace(config.StubBaseUrl))
         {
             _logger.LogError("StubBaseUrl is not configured. Sync aborted before touching any stub or collection.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.MdbListApiKey))
+        {
+            _logger.LogError("MdbListApiKey is not configured. Sync aborted before touching any stub or collection.");
             return;
         }
 
@@ -112,7 +118,7 @@ public sealed class SeasonalContentSyncTask : IScheduledTask
 
             try
             {
-                var request = new ListSourceRequest(listConfig.Id.ToString(), listConfig.Username, listConfig.Slug, listConfig.ApiKey, listConfig.Limit);
+                var request = new ListSourceRequest(listConfig.Id.ToString(), listConfig.Username, listConfig.Slug, config.MdbListApiKey, listConfig.Limit);
                 var items = await _listSource.GetItemsAsync(request, cancellationToken).ConfigureAwait(false);
                 succeeded.Add((listConfig, ListPartitioner.Partition(items, ownedIndex)));
             }

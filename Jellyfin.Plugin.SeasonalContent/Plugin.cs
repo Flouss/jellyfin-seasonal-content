@@ -6,6 +6,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SeasonalContent;
 
@@ -19,14 +20,28 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     /// <param name="applicationPaths">Instance of the <see cref="IApplicationPaths"/> interface.</param>
     /// <param name="xmlSerializer">Instance of the <see cref="IXmlSerializer"/> interface.</param>
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
+    /// <param name="logger">Instance of the <see cref="ILogger{TCategoryName}"/> interface.</param>
+    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<Plugin> logger)
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+
+        var migration = ConfigMigration.MigrateMdbListApiKey(Configuration);
+        if (migration.ListsDisagreed)
+        {
+            logger.LogWarning(
+                "Multiple lists had different MDBList API keys before this upgrade - one of them was kept as the new global key (Dashboard -> Plugins -> {Name}); double-check it's the right one.",
+                Name);
+        }
+
+        if (migration.Changed)
+        {
+            SaveConfiguration();
+        }
     }
 
     /// <inheritdoc />
-    public override string Name => "Seasonal Content";
+    public override string Name => "Smarter Collections";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("3ca6023b-866a-4acb-a1e9-d30c07b4f3aa");
@@ -44,7 +59,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = Name,
-                DisplayName = "Seasonal Content Settings",
+                DisplayName = "Smarter Collections Settings",
                 EnableInMainMenu = true,
                 MenuIcon = "ac_unit",
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)

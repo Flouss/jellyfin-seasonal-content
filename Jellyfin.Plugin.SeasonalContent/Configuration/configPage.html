@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Seasonal Content</title>
+    <title>Smarter Collections</title>
 </head>
 <body>
     <div id="SeasonalContentConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
@@ -30,6 +30,12 @@
                             </button>
                         </div>
                         <div id="testStubUrlResult" class="fieldDescription" hidden></div>
+
+                        <div class="inputContainer" style="margin-top:1.5em;">
+                            <label class="inputLabel inputLabelUnfocused" for="MdbListApiKey">MDBList API key</label>
+                            <input id="MdbListApiKey" name="MdbListApiKey" type="password" is="emby-input" autocomplete="new-password" />
+                            <div class="fieldDescription">Shared by every list below. Leave blank to keep the currently saved key.</div>
+                        </div>
 
                         <div class="inputContainer" style="margin-top:1.5em;">
                             <label class="inputLabel inputLabelUnfocused" for="JellyseerrUrl">Jellyseerr URL</label>
@@ -151,10 +157,6 @@
                     wrap.style.cssText = 'border:1px solid rgba(255,255,255,0.15);border-radius:0.3em;padding:1em;margin-bottom:1em;';
                     wrap.dataset.id = list.Id || '';
 
-                    var apiKeyHint = list.ApiKeySet
-                        ? 'A key is saved (' + (list.ApiKeyPreview || '****') + '). Leave blank to keep it.'
-                        : 'Required.';
-
                     wrap.innerHTML =
                         '<label class="emby-checkbox-label">' +
                         '  <input class="list-enabled" type="checkbox" is="emby-checkbox"' + (list.Enabled !== false ? ' checked' : '') + ' />' +
@@ -175,11 +177,6 @@
                         '<div class="inputContainer">' +
                         '  <label class="inputLabel inputLabelUnfocused">MDBList slug</label>' +
                         '  <input class="list-slug" type="text" is="emby-input" value="' + escapeHtml(list.Slug || '') + '" />' +
-                        '</div>' +
-                        '<div class="inputContainer">' +
-                        '  <label class="inputLabel inputLabelUnfocused">MDBList API key</label>' +
-                        '  <input class="list-apikey" type="password" is="emby-input" autocomplete="new-password" />' +
-                        '  <div class="fieldDescription">' + apiKeyHint + '</div>' +
                         '</div>' +
                         '<div class="inputContainer">' +
                         '  <label class="inputLabel inputLabelUnfocused">Limit (1-500)</label>' +
@@ -216,14 +213,12 @@
 
                 function collectListInputs() {
                     return Array.prototype.map.call(document.querySelectorAll('#listsContainer > div'), function (wrap) {
-                        var apiKeyTyped = wrap.querySelector('.list-apikey').value;
                         return {
                             id: wrap.dataset.id || null,
                             enabled: wrap.querySelector('.list-enabled').checked,
                             displayName: wrap.querySelector('.list-displayname').value.trim(),
                             username: wrap.querySelector('.list-username').value.trim(),
                             slug: wrap.querySelector('.list-slug').value.trim(),
-                            apiKey: apiKeyTyped ? apiKeyTyped : null,
                             limit: parseInt(wrap.querySelector('.list-limit').value, 10) || 100
                         };
                     });
@@ -374,6 +369,8 @@
                             document.querySelector('#StubBaseUrl').value = config.StubBaseUrl || '';
                             updateStubUrlWarning();
 
+                            document.querySelector('#MdbListApiKey').placeholder = config.MdbListApiKey ? 'Leave blank to keep the saved key' : '';
+
                             document.querySelector('#JellyseerrUrl').value = config.JellyseerrUrl || '';
                             document.querySelector('#JellyseerrApiKey').placeholder = config.JellyseerrApiKey ? 'Leave blank to keep the saved key' : '';
 
@@ -462,6 +459,12 @@
 
                         ApiClient.getPluginConfiguration(SeasonalContentConfig.pluginUniqueId).then(function (config) {
                             config.StubBaseUrl = document.querySelector('#StubBaseUrl').value.trim();
+
+                            var typedMdbListKey = document.querySelector('#MdbListApiKey').value;
+                            if (typedMdbListKey) {
+                                config.MdbListApiKey = typedMdbListKey;
+                            }
+
                             config.JellyseerrUrl = document.querySelector('#JellyseerrUrl').value.trim();
 
                             var typedJellyseerrKey = document.querySelector('#JellyseerrApiKey').value;

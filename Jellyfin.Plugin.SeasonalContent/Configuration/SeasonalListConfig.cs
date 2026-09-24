@@ -39,7 +39,11 @@ public class SeasonalListConfig
     public string Slug { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the MDBList API key. Never logged; redacted on read (see <c>Api/ListsController</c>).
+    /// Gets or sets the MDBList API key. <b>Legacy only</b>: superseded by
+    /// <see cref="PluginConfiguration.MdbListApiKey"/> (one key for every list, instead of one per
+    /// list). Kept here - not deleted - only so <c>IXmlSerializer</c> still deserializes an old
+    /// saved config's key before <see cref="ConfigMigration.MigrateMdbListApiKey"/> runs and clears
+    /// it; nothing in the sync pipeline reads this field anymore.
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
