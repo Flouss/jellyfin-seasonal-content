@@ -1,9 +1,9 @@
 [
   {
     "guid": "3ca6023b-866a-4acb-a1e9-d30c07b4f3aa",
-    "name": "Seasonal Content",
-    "description": "Curated seasonal movie lists (from MDBList) as native Jellyfin Collections, with Jellyseerr requests for titles the server doesn't own.",
-    "overview": "Seasonal movie collections with request support",
+    "name": "Smarter Collections",
+    "description": "Curated MDBList lists (movies and TV shows) as native Jellyfin Collections, with Jellyseerr requests for titles the server doesn't own.",
+    "overview": "Curated movie & TV collections from MDBList, with request support",
     "owner": "Flouss",
     "category": "Metadata",
     "versions": [
