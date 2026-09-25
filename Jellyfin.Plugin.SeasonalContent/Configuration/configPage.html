@@ -235,6 +235,7 @@
                         if (parsed) {
                             wrap.querySelector('.list-username').value = parsed.username;
                             wrap.querySelector('.list-slug').value = parsed.slug;
+                            wrap.querySelector('.list-displayname').value = deriveDisplayName(parsed.slug);
                             e.target.value = '';
                         }
                     });
@@ -244,6 +245,15 @@
                     });
 
                     document.querySelector('#listsContainer').appendChild(wrap);
+                }
+
+                function deriveDisplayName(slug) {
+                    // "the-top-100-halloween-movies" -> "The Top 100 Halloween Movies".
+                    return slug
+                        .split('-')
+                        .filter(function (part) { return part.length > 0; })
+                        .map(function (word) { return word.charAt(0).toUpperCase() + word.slice(1); })
+                        .join(' ');
                 }
 
                 function escapeHtml(s) {

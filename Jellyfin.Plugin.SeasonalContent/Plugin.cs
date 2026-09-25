@@ -61,7 +61,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 Name = Name,
                 DisplayName = "Smarter Collections Settings",
                 EnableInMainMenu = true,
-                MenuIcon = "ac_unit",
+                MenuIcon = "collections",
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)
             }
         ];
