@@ -27,6 +27,18 @@ All notable changes to this plugin are documented here.
   at least one extra profile is configured; leaving the list empty keeps today's single-stub
   behavior unchanged.
 
+### Fixed
+
+- **Collections never got an image.** Jellyfin's own image provider for BoxSets only runs on
+  locked collections; created collections are now locked (they never carry real online metadata
+  anyway, so there's nothing to lose by skipping internet refresh), and existing collections
+  self-heal on their next sync.
+- **TV/movie stub libraries never got poster/backdrop art** - metadata came through but images
+  didn't, because the library's `TypeOptions` set a metadata fetcher without also setting an image
+  fetcher.
+- Config page: pasting an mdblist.com URL now also fills in Display name (derived from the slug),
+  not just username/slug - still editable afterward like the other two fields.
+
 ## 0.1.0.0
 
 - Curated MDBList lists as native Jellyfin Collections, one BoxSet per configured list, shared

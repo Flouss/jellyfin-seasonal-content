@@ -98,7 +98,20 @@ public sealed class LibrarySetupService : ILibrarySetupService
             EnableInternetProviders = true,
 #pragma warning restore CS0618
             PathInfos = [new MediaPathInfo(stubRootPath)],
-            TypeOptions = [new TypeOptions { Type = itemTypeOptionsType, MetadataFetchers = ["TheMovieDb"] }]
+            // ImageFetchers must be set explicitly too - leaving it unset persists as an empty
+            // list (confirmed live 2026-09-25: the TV stub library's saved options.xml had
+            // <ImageFetchers /> with nothing in it), which means "no image provider enabled for
+            // this type", not "use the defaults". Without this, TheMovieDb still supplies
+            // metadata (title/overview) but Jellyfin never downloads any poster/backdrop art.
+            TypeOptions =
+            [
+                new TypeOptions
+                {
+                    Type = itemTypeOptionsType,
+                    MetadataFetchers = ["TheMovieDb"],
+                    ImageFetchers = ["TheMovieDb"]
+                }
+            ]
         };
         await _libraryManager.AddVirtualFolder(libraryName, collectionType, options, refreshLibrary: true).ConfigureAwait(false);
         _logger.LogInformation("Created stub library {Name} at {Path}.", libraryName, stubRootPath);
